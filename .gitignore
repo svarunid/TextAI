@@ -1,3 +1,4 @@
-/en_fr
-*.model
-*.vocab
+/en_fr/
+**/*.model
+**/*.vocab
+**/*.zip
