@@ -1,4 +1,6 @@
 /en_fr/
+**/__pycache__/
+**/*.eqx
 **/*.pickle
 **/*.model
 **/*.vocab
