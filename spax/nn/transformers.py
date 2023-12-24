@@ -3,9 +3,8 @@ import numpy as np
 import equinox as eqx
 import jax.numpy as jnp
 
-
-from linear import Linear, FFNN
-from norm import LayerNorm
+from .linear import Linear, FFNN
+from .norm import LayerNorm
 
 class MultiHeadAttention(eqx.Module):
     """
@@ -244,7 +243,7 @@ class EncoderDecoder(eqx.Module):
     encoder: eqx.Module
     decoder: eqx.Module
 
-    def __init__(self, key, dim, enc_heads, enc_layers, dec_heads, dec_layers, in_vocab, out_vocab, in_len, out_len):
+    def __init__(self, key, dim, enc_layers, dec_layers, n_heads, in_vocab, out_vocab, in_len, out_len):
         """
         Initializes the weights for the layer.
 
@@ -254,14 +253,12 @@ class EncoderDecoder(eqx.Module):
             Random key for initializing the weights.
         dim: int
             Model dimension.
-        enc_heads: int
-            Number of encoder heads.
         enc_layers: int
             Number of encoder layers.
-        dec_heads: int
-            Number of decoder heads.
         dec_layers: int
             Number of decoder layers.
+        n_heads: int
+            Number of heads.
         in_vocab: int
             Input vocabulary size.
         out_vocab: int
@@ -272,8 +269,8 @@ class EncoderDecoder(eqx.Module):
             Maximum output sequence length.
         """
         enc_key, dec_key = jax.random.split(key, num=2)
-        self.encoder = Encoder(enc_key, enc_layers, enc_heads, dim, in_len, in_vocab)
-        self.decoder = Decoder(dec_key, dec_layers, dec_heads, dim, out_len, out_vocab)
+        self.encoder = Encoder(enc_key, enc_layers, n_heads, dim, in_len, in_vocab)
+        self.decoder = Decoder(dec_key, dec_layers, n_heads, dim, out_len, out_vocab)
 
     @eqx.filter_jit
     def __call__(self, X, y, X_mask, y_mask):
@@ -307,7 +304,7 @@ class Transformer(eqx.Module):
     enc_dec: eqx.Module
     linear: eqx.Module
 
-    def __init__(self, key, dim, enc_heads, enc_layers, dec_heads, dec_layers, in_vocab, out_vocab, in_len, out_len):
+    def __init__(self, key, dim, enc_layers, dec_layers, n_heads, in_vocab, out_vocab, in_len, out_len):
         """
         Initializes the weights for the layer.
 
@@ -317,14 +314,12 @@ class Transformer(eqx.Module):
             Random key for initializing the weights.
         dim: int
             Model dimension.
-        enc_heads: int
-            Number of encoder heads.
         enc_layers: int
             Number of encoder layers.
-        dec_heads: int
-            Number of decoder heads.
         dec_layers: int
             Number of decoder layers.
+        n_heads: int 
+            Number of heads.
         in_vocab: int
             Input vocabulary size.
         out_vocab: int
@@ -336,8 +331,7 @@ class Transformer(eqx.Module):
         """
         encdec_key, linear_key = jax.random.split(key)
         self.enc_dec = EncoderDecoder(encdec_key, dim,
-                                      enc_heads, enc_layers, 
-                                      dec_heads, dec_layers, 
+                                      enc_layers, dec_layers, n_heads,
                                       in_vocab, out_vocab, in_len, out_len)
         self.linear = Linear(linear_key, dim, out_vocab)
 

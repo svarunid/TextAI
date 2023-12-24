@@ -103,7 +103,7 @@ def pad_or_truncate(seq, size=32, pad=0):
     """
     return list(islice(chain(seq, repeat(pad)), size))
 
-def seq2seq_batched_iterator(data, seq_len, batch_size=32):
+def seq2seq_batched_iterator(data, in_seq, out_seq, batch_size=32):
     """
     A dataloader for sequence to sequence tasks.
     Loads data in batches.
@@ -112,8 +112,10 @@ def seq2seq_batched_iterator(data, seq_len, batch_size=32):
     ----------
     data: Iterator
         Pairs of Sequences.
-    seq_len: int
-        Max length of the sequence.
+    in_seq: int
+        Input sequence length.
+    out_seq: int
+        Output sequence length.
     batch_size: int, optional
         Size of a batch. (default is 32)
 
@@ -130,8 +132,8 @@ def seq2seq_batched_iterator(data, seq_len, batch_size=32):
         X = [x[0] for x in batch]
         y = [x[1] for x in batch]
         
-        Xbt = [pad_or_truncate(seq, seq_len) for seq in X]
-        y = [pad_or_truncate(seq, seq_len+1) for seq in y]
+        Xbt = [pad_or_truncate(seq, in_seq) for seq in X]
+        y = [pad_or_truncate(seq, out_seq+1) for seq in y]
         ybt = [x[:-1] for x in y]
         labelbt = [x[1:] for x in y]
         
