@@ -1,0 +1,26 @@
+2023-12-27 13:57:40,882 INFO    MainThread:15092 [wandb_setup.py:_flush():76] Current SDK version is 0.16.1
+2023-12-27 13:57:40,882 INFO    MainThread:15092 [wandb_setup.py:_flush():76] Configure stats pid to 15092
+2023-12-27 13:57:40,882 INFO    MainThread:15092 [wandb_setup.py:_flush():76] Loading settings from C:\Users\Arun\.config\wandb\settings
+2023-12-27 13:57:40,882 INFO    MainThread:15092 [wandb_setup.py:_flush():76] Loading settings from D:\Projects\Data Science\machine_translation\wandb\settings
+2023-12-27 13:57:40,882 INFO    MainThread:15092 [wandb_setup.py:_flush():76] Loading settings from environment variables: {}
+2023-12-27 13:57:40,882 INFO    MainThread:15092 [wandb_setup.py:_flush():76] Applying setup settings: {'_disable_service': False}
+2023-12-27 13:57:40,883 INFO    MainThread:15092 [wandb_setup.py:_flush():76] Inferring run settings from compute environment: {'program_relpath': 'train_transformer.py', 'program_abspath': 'd:\\Projects\\Data Science\\machine_translation\\train_transformer.py', 'program': 'd:\\Projects\\Data Science\\machine_translation\\train_transformer.py'}
+2023-12-27 13:57:40,883 INFO    MainThread:15092 [wandb_init.py:_log_setup():524] Logging user logs to D:\Projects\Data Science\machine_translation\wandb\run-20231227_135740-jua11bll\logs\debug.log
+2023-12-27 13:57:40,883 INFO    MainThread:15092 [wandb_init.py:_log_setup():525] Logging internal logs to D:\Projects\Data Science\machine_translation\wandb\run-20231227_135740-jua11bll\logs\debug-internal.log
+2023-12-27 13:57:40,884 INFO    MainThread:15092 [wandb_init.py:init():564] calling init triggers
+2023-12-27 13:57:40,884 INFO    MainThread:15092 [wandb_init.py:init():571] wandb.init called with sweep_config: {}
+config: {'seed': '42', 'in_vocab': '5_000', 'out_vocab': '5_000', 'in_seq_len': '64', 'out_seq_len': '64', 'batch_size': '32', 'num_heads': '8', 'd_model': '256', 'd_ff': '1024', 'enc_layers': '3', 'dec_layers': '3', 'epochs': 10, 'dataset': 'en_fr'}
+2023-12-27 13:57:40,884 INFO    MainThread:15092 [wandb_init.py:init():614] starting backend
+2023-12-27 13:57:40,884 INFO    MainThread:15092 [wandb_init.py:init():618] setting up manager
+2023-12-27 13:57:40,891 INFO    MainThread:15092 [backend.py:_multiprocessing_setup():105] multiprocessing start_methods=spawn, using: spawn
+2023-12-27 13:57:40,895 INFO    MainThread:15092 [wandb_init.py:init():624] backend started and connected
+2023-12-27 13:57:40,901 INFO    MainThread:15092 [wandb_init.py:init():716] updated telemetry
+2023-12-27 13:57:40,952 INFO    MainThread:15092 [wandb_init.py:init():749] communicating run to backend with 90.0 second timeout
+2023-12-27 13:57:42,045 INFO    MainThread:15092 [wandb_run.py:_on_init():2254] communicating current version
+2023-12-27 13:57:42,559 INFO    MainThread:15092 [wandb_run.py:_on_init():2263] got version response 
+2023-12-27 13:57:42,559 INFO    MainThread:15092 [wandb_init.py:init():800] starting run threads in backend
+2023-12-27 13:57:42,903 INFO    MainThread:15092 [wandb_run.py:_console_start():2233] atexit reg
+2023-12-27 13:57:42,904 INFO    MainThread:15092 [wandb_run.py:_redirect():2088] redirect: wrap_raw
+2023-12-27 13:57:42,904 INFO    MainThread:15092 [wandb_run.py:_redirect():2153] Wrapping output streams.
+2023-12-27 13:57:42,904 INFO    MainThread:15092 [wandb_run.py:_redirect():2178] Redirects installed.
+2023-12-27 13:57:42,906 INFO    MainThread:15092 [wandb_init.py:init():841] run started, returning control to user process

@@ -1,8 +1,10 @@
 import unicodedata
-import numpy as np
+from itertools import chain, islice, repeat
+
 import jax.numpy as jnp
+import numpy as np
 import sentencepiece as spm
-from itertools import islice, chain, repeat
+
 
 def train_spm(iterable, prefix, vocab=2_000, sentence_size=50_000, model_type="bpe"):
     """
@@ -22,11 +24,22 @@ def train_spm(iterable, prefix, vocab=2_000, sentence_size=50_000, model_type="b
     model_type: str, optional
         Type of model. Either "bpe" or "unigram". (default is "bpe")
     """
-    spm.SentencePieceTrainer.train(sentence_iterator=iter(iterable), model_prefix=prefix, vocab_size=vocab,
-                                   model_type="bpe", normalization_rule_name="identity", 
-                                   input_sentence_size=sentence_size, shuffle_input_sentence=True, 
-                                   pad_id=0, unk_id=1, bos_id=2, eos_id=3, unk_surface='<unk>')
-    
+    spm.SentencePieceTrainer.train(
+        sentence_iterator=iter(iterable),
+        model_prefix=prefix,
+        vocab_size=vocab,
+        model_type="bpe",
+        normalization_rule_name="identity",
+        input_sentence_size=sentence_size,
+        shuffle_input_sentence=True,
+        pad_id=0,
+        unk_id=1,
+        bos_id=2,
+        eos_id=3,
+        unk_surface="<unk>",
+    )
+
+
 def load_spm(path):
     """
     Load a pretrained tokenizer
@@ -43,6 +56,7 @@ def load_spm(path):
     """
     local_spm = spm.SentencePieceProcessor(model_file=f"{path}.model")
     return local_spm
+
 
 def normalize(arr, form):
     """
@@ -61,6 +75,7 @@ def normalize(arr, form):
         A list of normalized sentences.
     """
     return [unicodedata.normalize(form, seq) for seq in arr]
+
 
 def create_pad_masks(arr, pad=0, mode="multiplicative"):
     """
@@ -84,6 +99,7 @@ def create_pad_masks(arr, pad=0, mode="multiplicative"):
         return jnp.where(arr == pad, np.NINF, 0)
     return jnp.where(arr == pad, 0, 1)
 
+
 def pad_or_truncate(seq, size=32, pad=0):
     """
     Pads and truncates a list tokens a specific length.
@@ -95,7 +111,7 @@ def pad_or_truncate(seq, size=32, pad=0):
         Max size of the sequence. (default is 32)
     pad: int, optional
         The ID to use for padding. (defualt is 0)
-    
+
     Returns
     -------
     list
@@ -103,11 +119,12 @@ def pad_or_truncate(seq, size=32, pad=0):
     """
     return list(islice(chain(seq, repeat(pad)), size))
 
+
 def seq2seq_batched_iterator(data, in_seq, out_seq, batch_size=32):
     """
     A dataloader for sequence to sequence tasks.
     Loads data in batches.
-    
+
     Parameters
     ----------
     data: Iterator
@@ -131,10 +148,10 @@ def seq2seq_batched_iterator(data, in_seq, out_seq, batch_size=32):
     while batch := tuple(islice(data, batch_size)):
         X = [x[0] for x in batch]
         y = [x[1] for x in batch]
-        
+
         Xbt = [pad_or_truncate(seq, in_seq) for seq in X]
-        y = [pad_or_truncate(seq, out_seq+1) for seq in y]
+        y = [pad_or_truncate(seq, out_seq + 1) for seq in y]
         ybt = [x[:-1] for x in y]
         labelbt = [x[1:] for x in y]
-        
+
         yield Xbt, ybt, labelbt

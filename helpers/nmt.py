@@ -20,10 +20,11 @@ def load_parallel_corpus(src, tgt):
         src = src_f.readlines()
         tgt = tgt_f.readlines()
         if len(src) != len(tgt):
-            raise ValueError("Number of records in source and target files are not equal")
+            raise ValueError(
+                "Number of records in source and target files are not equal"
+            )
         for i in range(len(src)):
             if not src[i] and tgt[i]:
                 src.pop(i)
                 tgt.pop(i)
         return src, tgt
-    

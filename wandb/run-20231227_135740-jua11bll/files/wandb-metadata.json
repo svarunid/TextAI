@@ -1,0 +1,53 @@
+{
+    "os": "Windows-10-10.0.22621-SP0",
+    "python": "3.10.13",
+    "heartbeatAt": "2023-12-27T08:27:42.738772",
+    "startedAt": "2023-12-27T08:27:40.875659",
+    "docker": null,
+    "cuda": null,
+    "args": [],
+    "state": "running",
+    "program": "d:\\Projects\\Data Science\\machine_translation\\train_transformer.py",
+    "codePathLocal": "train_transformer.py",
+    "codePath": "train_transformer.py",
+    "git": {
+        "remote": "https://github.com/svarunid/machine-translation.git",
+        "commit": "b7e5d346fd54ddc97370f818fb0830432d0c78b2"
+    },
+    "email": "svarunid@gmail.com",
+    "root": "D:/Projects/Data Science/machine_translation",
+    "host": "Dhev",
+    "username": "Arun",
+    "executable": "D:\\Projects\\Data Science\\env\\python.exe",
+    "cpu_count": 4,
+    "cpu_count_logical": 8,
+    "cpu_freq": {
+        "current": 1792.0,
+        "min": 0.0,
+        "max": 1992.0
+    },
+    "cpu_freq_per_core": [
+        {
+            "current": 1792.0,
+            "min": 0.0,
+            "max": 1992.0
+        }
+    ],
+    "disk": {
+        "/": {
+            "total": 146.48437118530273,
+            "used": 56.00380325317383
+        }
+    },
+    "gpu": "NVIDIA GeForce MX250",
+    "gpu_count": 1,
+    "gpu_devices": [
+        {
+            "name": "NVIDIA GeForce MX250",
+            "memory_total": 2147483648
+        }
+    ],
+    "memory": {
+        "total": 15.816089630126953
+    }
+}
