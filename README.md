@@ -7,7 +7,7 @@ A repository hosting models I build for natural language translation tasks. I ai
 
 ## Pipeline
 ![pipeline](./img/nmt-pipeline.png)
-+ Obtaining namchine translation datasets. Starting with small datasets due to restriction of compute resouce.
++ Obtaining namchine translation datasets. Starting with small datasets due to restriction of compute resource.
     - [OPUS](https://opus.nlpl.eu/)
     - [Tatoeba](https://tatoeba.org/en/downloads)
     - [WMT](https://www.wmt-slt.com/)

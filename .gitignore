@@ -1,6 +1,8 @@
 .ipynb_checkpoints/
+.vscode/
 /en_fr/
 /wandb/
+env/
 **/__pycache__/
 **/*.eqx
 **/*.pickle
