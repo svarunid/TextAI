@@ -1,6 +1,7 @@
 import unicodedata
 from itertools import chain, islice, repeat
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import sentencepiece as spm
@@ -77,7 +78,7 @@ def normalize(arr, form):
     return [unicodedata.normalize(form, seq) for seq in arr]
 
 
-def create_pad_masks(arr, pad=0, mode="multiplicative"):
+def create_pad_masks(arr: jax.Array, pad=0):
     """
     Creates a mask array in the same shape as the given a padded array.
 
@@ -95,9 +96,7 @@ def create_pad_masks(arr, pad=0, mode="multiplicative"):
     jax.Array
         A mask array.
     """
-    if mode == "multiplicative":
-        return jnp.where(arr == pad, np.NINF, 0)
-    return jnp.where(arr == pad, 0, 1)
+    return jnp.where(arr==0, jnp.full_like(arr, jnp.NINF, dtype=arr.dtype), 0)
 
 
 def pad_or_truncate(seq, size=32, pad=0):
@@ -155,3 +154,21 @@ def seq2seq_batched_iterator(data, in_seq, out_seq, batch_size=32):
         labelbt = [x[1:] for x in y]
 
         yield Xbt, ybt, labelbt
+
+def subsequent_mask(size):
+    """
+    Creates a mask for the target sequence.
+    Used to prevent the model from atttening to future tokens.
+
+    Parameters
+    ----------
+    size: int
+        Size of the mask.
+
+    Returns
+    -------
+    jax.Array
+        A mask array.
+    """
+    arr = jnp.triu(jnp.ones((size, size), dtype=jnp.int16), 1) == 1
+    return jnp.where(arr, jnp.full_like(arr, jnp.NINF, dtype=arr.dtype), 0)

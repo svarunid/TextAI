@@ -7,6 +7,7 @@ import jax.numpy as jnp
 import optax
 import wandb
 from jax.tree_util import tree_map
+from jax import config as jax_config
 from spax.nn.linear import Embedding, Linear, embedding, linear
 from spax.nn.transformers import Decoder, Encoder, decoder, encoder
 from spax.nn.utils import optim
@@ -16,6 +17,9 @@ from helpers import spickle, text
 
 config = configparser.ConfigParser()
 config.read("./config/transformer_config.ini")
+
+jax_config.update("jax_debug_nans", True)
+jax_config.update("jax_debug_infs", True)
 
 dataloader = spickle.sload(config.get("training", "data_path"))
 dataloader = text.seq2seq_batched_iterator(
@@ -128,6 +132,7 @@ if config.getboolean("training", "wandb"):
     wandb_config = dict(config["model"])
     wandb_config["epochs"] = config.getint("training", "epochs")
     wandb_config["dataset"] = config.get("training", "dataset")
+    wandb_config["model_parameters"] = sum([x.size for x in jax.tree_util.tree_leaves(model)])
 
     run = wandb.init(
         project=config.get("training", "wandb_project"),
@@ -136,18 +141,22 @@ if config.getboolean("training", "wandb"):
     )
 
 print("Running...")
+print(f"Parameters: {sum([x.size for x in jax.tree_util.tree_leaves(model)])}")
 for e in range(config.getint("training", "epochs")):
     total_loss = 0
     num_batches = 0
     for i, (Xbt, ybt, labelbt) in enumerate(dataloader):
         Xbt, ybt, labelbt = [jnp.array(x) for x in (Xbt, ybt, labelbt)]
         Xmask, ymask = [text.create_pad_masks(x) for x in (Xbt, ybt)]
+        ymask = ymask[:, jnp.newaxis, :] + text.subsequent_mask(ymask.shape[-1])
 
         model, opt_state, batch_loss = step(
             model, opt_state, Xbt, ybt, Xmask, ymask, labelbt
         )
         total_loss += batch_loss
         num_batches += 1
+
+        print(f"loss: {total_loss/num_batches}")
 
         if num_batches % config.getint("training", "checkpoint_freq") == 0:
             eqx.tree_serialise_leaves(model_path, model)
