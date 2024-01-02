@@ -84,6 +84,9 @@ if config.getboolean("training", "wandb"):
         config=wandb_config,
     )
 
+checkpoint_freq = config.getint("training", "checkpoint_freq")
+use_wandb = config.getboolean("training", "wandb")
+
 print("Running...")
 for e in range(config.getint("training", "epochs")):
     total_loss = 0
@@ -99,16 +102,14 @@ for e in range(config.getint("training", "epochs")):
         total_loss += batch_loss
         num_batches += 1
 
-        print(f"loss: {total_loss/num_batches}")
-
-        if num_batches % config.getint("training", "checkpoint_freq") == 0:
+        if num_batches % checkpoint_freq == 0:
             eqx.tree_serialise_leaves(model_path, model)
             eqx.tree_deserialise_leaves(opt_state_path, opt_state)
             print(
                 f"Batches trained: {num_batches} | Avg. Batch loss: {total_loss/num_batches}"
             )
 
-        if config.getboolean("training", "wandb"):
+        if use_wandb:
             wandb.log({"loss": total_loss / num_batches})
 
     epoch_loss = total_loss / num_batches
