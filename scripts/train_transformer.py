@@ -91,7 +91,7 @@ print("Running...")
 for e in range(config.getint("training", "epochs")):
     total_loss = 0
     num_batches = 0
-    for i, (Xbt, ybt, labelbt) in enumerate(dataloader):
+    for Xbt, ybt, labelbt in dataloader:
         Xbt, ybt, labelbt = [jnp.array(x) for x in (Xbt, ybt, labelbt)]
         Xmask, ymask = [text.create_pad_masks(x) for x in (Xbt, ybt)]
         ymask = ymask[:, jnp.newaxis, :] + text.subsequent_mask(ymask.shape[-1])
