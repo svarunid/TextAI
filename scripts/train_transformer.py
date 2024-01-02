@@ -13,6 +13,7 @@ import wandb
 from helpers import spickle, text
 from models.transformer import transformer
 
+# Loading transformer config
 config_dir = (
     Path(path.dirname(path.realpath(__file__))).parent
     / "config"
@@ -21,8 +22,7 @@ config_dir = (
 config = configparser.ConfigParser()
 config.read(config_dir)
 
-print("pass")
-
+# Initialising data iterator
 dataloader = spickle.sload(config.get("training", "data_path"))
 dataloader = text.seq2seq_batched_iterator(
     dataloader,
@@ -31,7 +31,7 @@ dataloader = text.seq2seq_batched_iterator(
     config.getint("model", "batch_size"),
 )
 
-
+# Initialising transformer model
 model, forward = transformer(
     jax.random.PRNGKey(config.getint("model", "seed")),
     config.getint("model", "in_vocab"),
@@ -45,16 +45,19 @@ model, forward = transformer(
     config.getint("model", "dec_layers"),
 )
 
-
+# Defining loss function
+# Accepts padded lables too
 def loss(model, X, y, X_mask, y_mask, labels):
     y_pred = jnp.log(forward(model, X, y, X_mask, y_mask))
     y_pred = jnp.where(labels == 0, 0, jnp.take(y_pred, labels, axis=-1))
     count = jnp.count_nonzero(y_pred)
     return -jnp.sum(y_pred) / count
 
-
+# Defining optimiser
+# A linear warmup is used for the first 200 steps upto a peak learning rate of 0.1
+# The learning rate is then decayed using a cosine decay schedule for 2000 steps
 lr = config.getfloat("training", "lr")
-lr = optax.warmup_cosine_decay_schedule(lr, 0.1, 200, 2000, 0.5)
+lr = optax.warmup_cosine_decay_schedule(lr, 0.1, 200, 2000, 0.0001)
 optimizer = optax.adam(learning_rate=lr)
 
 opt_state, step = optim(
