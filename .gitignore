@@ -3,6 +3,7 @@
 /en_fr/
 /wandb/
 env/
+spaxnmt.egg-info/
 **/__pycache__/
 **/*.eqx
 **/*.pickle
