@@ -1,0 +1,10 @@
+Metadata-Version: 2.1
+Name: spaxnmt
+Version: 0.0.0
+Summary: A personal package for machine translation models
+Requires-Dist: jax>=0.4.0
+Requires-Dist: jaxlib>=0.4.0
+Requires-Dist: numpy>=1.26.0
+Requires-Dist: optax>=0.1.7
+Requires-Dist: wandb>=0.16.1
+Requires-Dist: sentencepiece>=0.1.99

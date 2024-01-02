@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "machine_translation_svarunid" 
+dynamic = ["version"]
+description = "A personal package for machine translation models"
+dependencies = [
+    "jax>=0.4.0",
+    "jaxlib>=0.4.0",
+    "numpy>=1.26.0",
+    "optax>=0.1.7",
+    "wandb>=0.16.1",
+    "sentencepiece>=0.1.99",
+]
+
+[tool.setuptools]
+packages = [
+    "helpers",
+    "models",
+    "pipelines",
+    "scripts",
+]

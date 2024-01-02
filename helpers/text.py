@@ -96,7 +96,7 @@ def create_pad_masks(arr: jax.Array, pad=0):
     jax.Array
         A mask array.
     """
-    return jnp.where(arr==0, jnp.full_like(arr, jnp.NINF, dtype=arr.dtype), 0)
+    return jnp.where(arr == 0, jnp.full_like(arr, jnp.NINF, dtype=arr.dtype), 0)
 
 
 def pad_or_truncate(seq, size=32, pad=0):
@@ -117,6 +117,25 @@ def pad_or_truncate(seq, size=32, pad=0):
         Truncated or padded list of tokens.
     """
     return list(islice(chain(seq, repeat(pad)), size))
+
+
+def subsequent_mask(size):
+    """
+    Creates a mask for the target sequence.
+    Used to prevent the model from atttening to future tokens.
+
+    Parameters
+    ----------
+    size: int
+        Size of the mask.
+
+    Returns
+    -------
+    jax.Array
+        A mask array.
+    """
+    arr = jnp.triu(jnp.ones((size, size), dtype=jnp.int16), 1) == 1
+    return jnp.where(arr, jnp.full_like(arr, jnp.NINF, dtype=arr.dtype), 0)
 
 
 def seq2seq_batched_iterator(data, in_seq, out_seq, batch_size=32):
@@ -154,21 +173,3 @@ def seq2seq_batched_iterator(data, in_seq, out_seq, batch_size=32):
         labelbt = [x[1:] for x in y]
 
         yield Xbt, ybt, labelbt
-
-def subsequent_mask(size):
-    """
-    Creates a mask for the target sequence.
-    Used to prevent the model from atttening to future tokens.
-
-    Parameters
-    ----------
-    size: int
-        Size of the mask.
-
-    Returns
-    -------
-    jax.Array
-        A mask array.
-    """
-    arr = jnp.triu(jnp.ones((size, size), dtype=jnp.int16), 1) == 1
-    return jnp.where(arr, jnp.full_like(arr, jnp.NINF, dtype=arr.dtype), 0)
