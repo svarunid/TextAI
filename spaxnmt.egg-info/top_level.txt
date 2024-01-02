@@ -1,4 +1,0 @@
-helpers
-models
-pipelines
-scripts
