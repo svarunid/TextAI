@@ -7,11 +7,15 @@ import jax
 import jax.numpy as jnp
 import optax
 from jax.tree_util import tree_map
+from jax import config as jax_config
 from spax.nn.utils import optim
 
 import wandb
 from helpers import spickle, text
 from models.transformer import transformer
+
+jax_config.update("jax_debug_nans", True)
+jax_config.update("jax_debug_infs", True)
 
 # Loading transformer config
 config_dir = (
@@ -65,56 +69,64 @@ opt_state, step = optim(
 )
 
 # Loading model and optimiser state if they exist
-model_path = path.join(config.get("training", "checkpoint_path"), "model.eqx")
-opt_state_path = path.join(config.get("training", "checkpoint_path"), "opt_state.eqx")
+model_path = path.join(config.get("checkpoint", "checkpoint_path"), "model.eqx")
+opt_state_path = path.join(config.get("checkpoint", "checkpoint_path"), "opt_state.eqx")
 if path.isfile(model_path) and path.isfile(opt_state_path):
     model = eqx.tree_deserialise_leaves(model_path, model)
     opt_state = eqx.tree_deserialise_leaves(opt_state_path, opt_state)
 
 # Optional configuration for logging to wandb
-if config.getboolean("training", "wandb"):
+if use_wandb := config.getboolean("wandb", "use_wandb"):
     wandb_config = dict(config["model"])
     wandb_config["epochs"] = config.getint("training", "epochs")
-    wandb_config["dataset"] = config.get("training", "dataset")
+    wandb_config["dataset_name"] = config.get("training", "dataset_name")
     wandb_config["model_parameters"] = sum(
         [x.size for x in jax.tree_util.tree_leaves(model)]
     )
 
     run = wandb.init(
-        project=config.get("training", "wandb_project"),
-        notes=config.get("training", "wandb_notes"),
+        project=config.get("wandb", "project"),
+        notes=config.get("wandb", "notes"),
+        name=config.get("wandb", "name"),
         config=wandb_config,
-        
     )
 
 # Training loop
-checkpoint_freq = config.getint("training", "checkpoint_freq")
-use_wandb = config.getboolean("training", "wandb")
-
 print("Running...")
+checkpoint_freq = config.getint("checkpoint", "checkpoint_freq")
+batches_trained = config.getint("training", "batches_trained")
+epochs_trained = config.getint("training", "epochs_trained")
 for e in range(config.getint("training", "epochs")):
-    total_loss = 0
-    num_batches = 0
-    for Xbt, ybt, labelbt in dataloader:
-        Xbt, ybt, labelbt = [jnp.array(x) for x in (Xbt, ybt, labelbt)]
-        Xmask, ymask = [text.create_pad_masks(x) for x in (Xbt, ybt)]
-        ymask = ymask[:, jnp.newaxis, :] + text.subsequent_mask(ymask.shape[-1])
+    # Skip epochs that have already been trained
+    if e >= epochs_trained:
+        total_loss = 0
+        num_batches = 0
+        for i, (Xbt, ybt, labelbt) in enumerate(dataloader):
+            # Skip batches that have already been trained
+            if i >= batches_trained:
+                Xbt, ybt, labelbt = [jnp.array(x) for x in (Xbt, ybt, labelbt)]
+                Xmask, ymask = [text.create_pad_masks(x) for x in (Xbt, ybt)]
+                ymask = ymask[:, jnp.newaxis, :] + text.subsequent_mask(ymask.shape[-1])
 
-        model, opt_state, batch_loss = step(
-            model, opt_state, Xbt, ybt, Xmask, ymask, labelbt
-        )
-        total_loss += batch_loss
-        num_batches += 1
+                model, opt_state, batch_loss = step(
+                    model, opt_state, Xbt, ybt, Xmask, ymask, labelbt
+                )
+                total_loss += batch_loss
+                num_batches += 1
 
-        if num_batches % checkpoint_freq == 0:
-            eqx.tree_serialise_leaves(model_path, model)
-            eqx.tree_deserialise_leaves(opt_state_path, opt_state)
-            print(
-                f"Batches trained: {num_batches} | Avg. Batch loss: {total_loss/num_batches}"
-            )
+                # Checkpoint model and optimiser state
+                if num_batches % checkpoint_freq == 0:
+                    eqx.tree_serialise_leaves(model_path, model)
+                    eqx.tree_serialise_leaves(opt_state_path, opt_state)
+                    print(
+                        f"Batches trained: {num_batches} | Avg. Batch loss: {total_loss/num_batches}"
+                    )
+                    config.set("training", "batches_trained", str(num_batches))
 
-        if use_wandb:
-            wandb.log({"loss": total_loss / num_batches})
+                # Log to wandb
+                if use_wandb:
+                    wandb.log({"loss": total_loss / num_batches})
 
-    epoch_loss = total_loss / num_batches
-    print(f"Epoch {e} | loss: {epoch_loss}")
+        config.set("training", "epochs_trained", str(e + 1))
+        epoch_loss = total_loss / num_batches
+        print(f"Epoch {e} | loss: {epoch_loss}")
