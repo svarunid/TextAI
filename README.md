@@ -6,7 +6,7 @@ Building sequence to sequence neural networks from scratch by replication popula
 A repository hosting models I build for natural language translation tasks. I aim to learn building an end-to-end [pipeline](#pipeline) of training, evaluating and productionizing deep learning models. I use JAX to implement all the neural network architectures. JAX facilitates ease-of-use, it makes me understand the nuances involved in training a model. I personally am building a tiny neural netowrk library with functional approach. 
 
 ## Pipeline
-![pipeline](./img/nmt-pipeline.png)
+![pipeline](./img/pipeline.jpg)
 + Obtaining namchine translation datasets. Starting with small datasets due to restriction of compute resource.
     - [OPUS](https://opus.nlpl.eu/)
     - [Tatoeba](https://tatoeba.org/en/downloads)
