@@ -1,9 +1,9 @@
 import unicodedata
 from itertools import chain, islice, repeat
+import random
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 import sentencepiece as spm
 
 
@@ -59,7 +59,7 @@ def load_spm(path):
     return local_spm
 
 
-def normalize(arr, form):
+def normalize(arr, form="NFC"):
     """
     Performs unicode noramlization on sentences.
 
@@ -76,6 +76,42 @@ def normalize(arr, form):
         A list of normalized sentences.
     """
     return [unicodedata.normalize(form, seq) for seq in arr]
+
+def split(lst, train_size=0.7, val_size=0.15, shuffle=True):
+    """
+    Splits a list of pairs of sentences into train, validation and test sets.
+
+    Parameters
+    ----------
+    lst: list
+        A list of pairs of sentences.
+    train_size: float, optional
+        Size of the training set. (default is 0.7)
+    val_size: float, optional
+        Size of the validation set. (default is 0.15)
+    shuffle: bool, optional
+        Whether to shuffle the data before splitting. (default is True)
+
+    Returns
+    -------
+    list
+        A list of training pairs.
+    list
+        A list of validation pairs.
+    list
+        A list of test pairs.
+    """
+    assert train_size + val_size < 1, "train_size + val_size must be less than 1"
+    assert train_size > 0, "train_size must be greater than 0"
+    assert val_size > 0, "val_size must be greater than 0"
+
+    if shuffle:
+        random.shuffle(lst)
+    
+    size = len(lst)
+    train_size = int(size * train_size)
+    val_size = train_size + int(size * val_size)
+    return lst[:train_size], lst[train_size:val_size], lst[val_size:]
 
 
 def create_pad_masks(arr: jax.Array, pad=0):

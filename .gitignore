@@ -1,12 +1,12 @@
 .ipynb_checkpoints/
 .vscode/
-/en_fr/
+/data/
 /wandb/
 env/
 spaxnmt.egg-info/
 **/__pycache__/
 **/*.eqx
-**/*.pickle
+**/*.*pkl
 **/*.model
 **/*.vocab
 **/*.zip

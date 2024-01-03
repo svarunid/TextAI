@@ -1,5 +1,5 @@
 import configparser
-from os import path
+from os import path, makedirs
 from pathlib import Path
 
 import equinox as eqx
@@ -68,12 +68,15 @@ opt_state, step = optim(
     model, optimizer, loss, in_axes=(None, 0, 0, 0, 0, 0), out_axes=0
 )
 
-# Loading model and optimiser state if they exist
-model_path = path.join(config.get("checkpoint", "checkpoint_path"), "model.eqx")
-opt_state_path = path.join(config.get("checkpoint", "checkpoint_path"), "opt_state.eqx")
-if path.isfile(model_path) and path.isfile(opt_state_path):
-    model = eqx.tree_deserialise_leaves(model_path, model)
-    opt_state = eqx.tree_deserialise_leaves(opt_state_path, opt_state)
+# Make checkpoint directory if it doesn't exist
+if config.getboolean("checkpoint", "use_checkpoint"):
+    makedirs(config.get("checkpoint", "checkpoint_path"), exist_ok=True)
+    # Loading model and optimiser state if they exist
+    model_path = path.join(config.get("checkpoint", "checkpoint_path"), "model.eqx")
+    opt_state_path = path.join(config.get("checkpoint", "checkpoint_path"), "opt_state.eqx")
+    if path.isfile(model_path) and path.isfile(opt_state_path):
+        model = eqx.tree_deserialise_leaves(model_path, model)
+        opt_state = eqx.tree_deserialise_leaves(opt_state_path, opt_state)
 
 # Optional configuration for logging to wandb
 if use_wandb := config.getboolean("wandb", "use_wandb"):
