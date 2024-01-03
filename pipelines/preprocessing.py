@@ -31,18 +31,18 @@ del src, tgt
 
 makedirs(config.get("tokenizer", "path"), exist_ok=True)
 
-# text.train_spm(
-#     src, 
-#     config.get("tokenizer", "path") + "src",
-#     config.getint(task, "vocab"),
-#     config.getint("tokenizer", "sample_size"),
-# )
-# text.train_spm(
-#     tgt, 
-#     config.get("tokenizer", "path") + "tgt",
-#     config.getint(task, "vocab"),
-#     config.getint("tokenizer", "sample_size"),
-# )
+text.train_spm(
+    src, 
+    config.get("tokenizer", "path") + "src",
+    config.getint(task, "vocab"),
+    config.getint("tokenizer", "sample_size"),
+)
+text.train_spm(
+    tgt, 
+    config.get("tokenizer", "path") + "tgt",
+    config.getint(task, "vocab"),
+    config.getint("tokenizer", "sample_size"),
+)
 
 src_spm, tgt_spm = (
     text.load_spm(config.get("tokenizer", "path") + "src"),
