@@ -139,7 +139,6 @@ for e in range(config.getint("training", "epochs")):
                 total_loss += batch_loss
                 num_batches += 1
                 
-
                 # Checkpoint model and optimiser state
                 if num_batches % checkpoint_freq == 0 and use_checkpoint:
                     eqx.tree_serialise_leaves(model_path, model)
@@ -151,8 +150,10 @@ for e in range(config.getint("training", "epochs")):
 
                 # Log to wandb
                 if use_wandb:
-                    wandb.log({"loss": total_loss / num_batches})
-                    wandb.log({"validation_loss": vmapped_loss(model, Xdev, ydev, Xdev_mask, ydev_mask, labeldev)})
+                    wandb.log({
+                        "loss": total_loss / num_batches,
+                        "validation_loss": vmapped_loss(model, Xdev, ydev, Xdev_mask, ydev_mask, labeldev)
+                    })
 
         config.set("training", "epochs_trained", str(e + 1))
         epoch_loss = total_loss / num_batches
