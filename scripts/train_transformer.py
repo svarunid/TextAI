@@ -1,14 +1,14 @@
 import configparser
-from os import path, makedirs
-from pathlib import Path
 import pickle
+from os import makedirs, path
+from pathlib import Path
 
 import equinox as eqx
 import jax
 import jax.numpy as jnp
 import optax
-from jax.tree_util import tree_map
 from jax import config as jax_config
+from jax.tree_util import tree_map
 from spax.nn.utils import optim
 
 import wandb
@@ -20,9 +20,7 @@ jax_config.update("jax_debug_infs", True)
 
 # Loading transformer config
 config_dir = (
-    Path(path.dirname(path.realpath(__file__))).parent
-    / "config"
-    / "transformer.ini"
+    Path(path.dirname(path.realpath(__file__))).parent / "config" / "transformer.ini"
 )
 config = configparser.ConfigParser()
 config.read(config_dir)
@@ -59,6 +57,7 @@ model, forward = transformer(
     config.getint("model", "dec_layers"),
 )
 
+
 # Defining loss function
 # Accepts padded lables too
 @jax.jit
@@ -67,6 +66,7 @@ def loss(model, X, y, X_mask, y_mask, labels):
     y_pred = jnp.where(labels == 0, 0, jnp.take(y_pred, labels, axis=-1))
     count = jnp.count_nonzero(y_pred)
     return -jnp.sum(y_pred) / count
+
 
 # Defining optimiser
 # A linear warmup is used for the first 200 steps upto a peak learning rate of 0.1
@@ -84,7 +84,9 @@ if config.getboolean("checkpoint", "use_checkpoint"):
     makedirs(config.get("checkpoint", "checkpoint_path"), exist_ok=True)
     # Loading model and optimiser state if they exist
     model_path = path.join(config.get("checkpoint", "checkpoint_path"), "model.eqx")
-    opt_state_path = path.join(config.get("checkpoint", "checkpoint_path"), "opt_state.eqx")
+    opt_state_path = path.join(
+        config.get("checkpoint", "checkpoint_path"), "opt_state.eqx"
+    )
     if path.isfile(model_path) and path.isfile(opt_state_path):
         model = eqx.tree_deserialise_leaves(model_path, model)
         opt_state = eqx.tree_deserialise_leaves(opt_state_path, opt_state)
@@ -138,7 +140,7 @@ for e in range(config.getint("training", "epochs")):
 
                 total_loss += batch_loss
                 num_batches += 1
-                
+
                 # Checkpoint model and optimiser state
                 if num_batches % checkpoint_freq == 0 and use_checkpoint:
                     eqx.tree_serialise_leaves(model_path, model)
@@ -150,10 +152,14 @@ for e in range(config.getint("training", "epochs")):
 
                 # Log to wandb
                 if use_wandb:
-                    wandb.log({
-                        "loss": total_loss / num_batches,
-                        "validation_loss": vmapped_loss(model, Xdev, ydev, Xdev_mask, ydev_mask, labeldev)
-                    })
+                    wandb.log(
+                        {
+                            "training_loss": total_loss / num_batches,
+                            "validation_loss": vmapped_loss(
+                                model, Xdev, ydev, Xdev_mask, ydev_mask, labeldev
+                            ),
+                        }
+                    )
 
         config.set("training", "epochs_trained", str(e + 1))
         epoch_loss = total_loss / num_batches
