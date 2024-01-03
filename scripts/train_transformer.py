@@ -1,13 +1,14 @@
 import configparser
-from os import path, makedirs
+import pickle
+from os import makedirs, path
 from pathlib import Path
 
 import equinox as eqx
 import jax
 import jax.numpy as jnp
 import optax
-from jax.tree_util import tree_map
 from jax import config as jax_config
+from jax.tree_util import tree_map
 from spax.nn.utils import optim
 
 import wandb
@@ -19,14 +20,12 @@ jax_config.update("jax_debug_infs", True)
 
 # Loading transformer config
 config_dir = (
-    Path(path.dirname(path.realpath(__file__))).parent
-    / "config"
-    / "transformer.ini"
+    Path(path.dirname(path.realpath(__file__))).parent / "config" / "transformer.ini"
 )
 config = configparser.ConfigParser()
 config.read(config_dir)
 
-# Initialising data iterator
+# Initialize data iterator
 dataloader = spickle.sload(config.get("training", "data_path"))
 dataloader = text.seq2seq_batched_iterator(
     dataloader,
@@ -35,7 +34,16 @@ dataloader = text.seq2seq_batched_iterator(
     config.getint("model", "batch_size"),
 )
 
-# Initialising transformer model
+# load validation data
+val_data = pickle.load(open(config.get("validation", "data_path"), "rb"))
+val_data = text.seq2seq_batched_iterator(
+    val_data,
+    config.getint("model", "in_seq_len"),
+    config.getint("model", "out_seq_len"),
+    len(val_data),
+)
+
+# Initialize transformer model
 model, forward = transformer(
     jax.random.PRNGKey(config.getint("model", "seed")),
     config.getint("model", "in_vocab"),
@@ -49,13 +57,16 @@ model, forward = transformer(
     config.getint("model", "dec_layers"),
 )
 
+
 # Defining loss function
 # Accepts padded lables too
+@jax.jit
 def loss(model, X, y, X_mask, y_mask, labels):
     y_pred = jnp.log(forward(model, X, y, X_mask, y_mask))
     y_pred = jnp.where(labels == 0, 0, jnp.take(y_pred, labels, axis=-1))
     count = jnp.count_nonzero(y_pred)
     return -jnp.sum(y_pred) / count
+
 
 # Defining optimiser
 # A linear warmup is used for the first 200 steps upto a peak learning rate of 0.1
@@ -73,7 +84,9 @@ if config.getboolean("checkpoint", "use_checkpoint"):
     makedirs(config.get("checkpoint", "checkpoint_path"), exist_ok=True)
     # Loading model and optimiser state if they exist
     model_path = path.join(config.get("checkpoint", "checkpoint_path"), "model.eqx")
-    opt_state_path = path.join(config.get("checkpoint", "checkpoint_path"), "opt_state.eqx")
+    opt_state_path = path.join(
+        config.get("checkpoint", "checkpoint_path"), "opt_state.eqx"
+    )
     if path.isfile(model_path) and path.isfile(opt_state_path):
         model = eqx.tree_deserialise_leaves(model_path, model)
         opt_state = eqx.tree_deserialise_leaves(opt_state_path, opt_state)
@@ -94,16 +107,26 @@ if use_wandb := config.getboolean("wandb", "use_wandb"):
         config=wandb_config,
     )
 
-# Training loop
-print("Running...")
+# Load train loop config
 use_checkpoint = config.getboolean("checkpoint", "use_checkpoint")
 checkpoint_freq = config.getint("checkpoint", "checkpoint_freq")
 batches_trained = config.getint("training", "batches_trained")
 epochs_trained = config.getint("training", "epochs_trained")
+
+# Process validation data
+Xdev, ydev, labeldev = next(val_data)
+Xdev, ydev, labeldev = [jnp.array(x) for x in (Xdev, ydev, labeldev)]
+Xdev_mask, ydev_mask = [text.create_pad_masks(x) for x in (Xdev, ydev)]
+ydev_mask = ydev_mask[:, jnp.newaxis, :] + text.subsequent_mask(ydev_mask.shape[-1])
+vmapped_loss = jax.vmap(loss, in_axes=(None, 0, 0, 0, 0, 0), out_axes=0)
+
+# Training loop
+print("Running...")
 for e in range(config.getint("training", "epochs")):
     # Skip epochs that have already been trained
     if e >= epochs_trained:
         total_loss = 0
+        validation_loss = 0
         num_batches = 0
         for i, (Xbt, ybt, labelbt) in enumerate(dataloader):
             # Skip batches that have already been trained
@@ -115,8 +138,12 @@ for e in range(config.getint("training", "epochs")):
                 model, opt_state, batch_loss = step(
                     model, opt_state, Xbt, ybt, Xmask, ymask, labelbt
                 )
+
                 total_loss += batch_loss
                 num_batches += 1
+                validation_loss += vmapped_loss(
+                    model, Xdev, ydev, Xdev_mask, ydev_mask, labeldev
+                )
 
                 # Checkpoint model and optimiser state
                 if num_batches % checkpoint_freq == 0 and use_checkpoint:

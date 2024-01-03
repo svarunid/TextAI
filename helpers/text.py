@@ -1,6 +1,6 @@
+import random
 import unicodedata
 from itertools import chain, islice, repeat
-import random
 
 import jax
 import jax.numpy as jnp
@@ -77,6 +77,7 @@ def normalize(arr, form="NFC"):
     """
     return [unicodedata.normalize(form, seq) for seq in arr]
 
+
 def split(lst, train_size=0.7, val_size=0.15, shuffle=True):
     """
     Splits a list of pairs of sentences into train, validation and test sets.
@@ -107,7 +108,7 @@ def split(lst, train_size=0.7, val_size=0.15, shuffle=True):
 
     if shuffle:
         random.shuffle(lst)
-    
+
     size = len(lst)
     train_size = int(size * train_size)
     val_size = train_size + int(size * val_size)

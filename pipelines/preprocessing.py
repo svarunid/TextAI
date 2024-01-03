@@ -1,14 +1,12 @@
 import configparser
-from os import path, makedirs
-from pathlib import Path
 import pickle
+from os import makedirs, path
+from pathlib import Path
 
-from helpers import spickle, text, nmt
+from helpers import nmt, spickle, text
 
 config_dir = (
-    Path(path.dirname(path.realpath(__file__))).parent
-    / "config"
-    / "preprocessing.ini"
+    Path(path.dirname(path.realpath(__file__))).parent / "config" / "preprocessing.ini"
 )
 config = configparser.ConfigParser()
 config.read(config_dir)
@@ -32,13 +30,13 @@ del src, tgt
 makedirs(config.get("tokenizer", "path"), exist_ok=True)
 
 text.train_spm(
-    src, 
+    src,
     config.get("tokenizer", "path") + "src",
     config.getint(task, "vocab"),
     config.getint("tokenizer", "sample_size"),
 )
 text.train_spm(
-    tgt, 
+    tgt,
     config.get("tokenizer", "path") + "tgt",
     config.getint(task, "vocab"),
     config.getint("tokenizer", "sample_size"),
@@ -46,22 +44,26 @@ text.train_spm(
 
 src_spm, tgt_spm = (
     text.load_spm(config.get("tokenizer", "path") + "src"),
-    text.load_spm(config.get("tokenizer", "path") + "tgt")
+    text.load_spm(config.get("tokenizer", "path") + "tgt"),
 )
 
 Xtr, Xdev, Xte = (
-    src_spm.tokenize(Xtr, alpha=config.getfloat("tokenizer", "alpha")), 
-    src_spm.tokenize(Xdev), 
-    src_spm.tokenize(Xte)
+    src_spm.tokenize(Xtr, alpha=config.getfloat("tokenizer", "alpha")),
+    src_spm.tokenize(Xdev),
+    src_spm.tokenize(Xte),
 )
 ytr, ydev, yte = (
-    tgt_spm.tokenize(ytr, add_bos=True, add_eos=True), 
-    tgt_spm.tokenize(ydev, add_bos=True, add_eos=True), 
-    tgt_spm.tokenize(yte, add_bos=True, add_eos=True)
+    tgt_spm.tokenize(ytr, add_bos=True, add_eos=True),
+    tgt_spm.tokenize(ydev, add_bos=True, add_eos=True),
+    tgt_spm.tokenize(yte, add_bos=True, add_eos=True),
 )
 
 makedirs(config.get("tokenizer", "save_path"), exist_ok=True)
 
 spickle.sdump(config.get("tokenizer", "save_path") + "/src.spkl", zip(Xtr, ytr))
-pickle.dump(zip(Xdev, ydev), open(config.get("tokenizer", "save_path") + "/dev.pkl", "wb"))
-pickle.dump(zip(Xte, yte), open(config.get("tokenizer", "save_path") + "/test.pkl", "wb"))
+pickle.dump(
+    zip(Xdev, ydev), open(config.get("tokenizer", "save_path") + "/dev.pkl", "wb")
+)
+pickle.dump(
+    zip(Xte, yte), open(config.get("tokenizer", "save_path") + "/test.pkl", "wb")
+)
