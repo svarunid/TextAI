@@ -21,7 +21,7 @@ jax_config.update("jax_debug_infs", True)
 config_dir = (
     Path(path.dirname(path.realpath(__file__))).parent
     / "config"
-    / "transformer_config.ini"
+    / "transformer.ini"
 )
 config = configparser.ConfigParser()
 config.read(config_dir)
@@ -93,6 +93,7 @@ if use_wandb := config.getboolean("wandb", "use_wandb"):
 
 # Training loop
 print("Running...")
+use_checkpoint = config.getboolean("checkpoint", "use_checkpoint")
 checkpoint_freq = config.getint("checkpoint", "checkpoint_freq")
 batches_trained = config.getint("training", "batches_trained")
 epochs_trained = config.getint("training", "epochs_trained")
@@ -115,7 +116,7 @@ for e in range(config.getint("training", "epochs")):
                 num_batches += 1
 
                 # Checkpoint model and optimiser state
-                if num_batches % checkpoint_freq == 0:
+                if num_batches % checkpoint_freq == 0 and use_checkpoint:
                     eqx.tree_serialise_leaves(model_path, model)
                     eqx.tree_serialise_leaves(opt_state_path, opt_state)
                     print(
