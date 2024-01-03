@@ -64,12 +64,14 @@ opt_state, step = optim(
     model, optimizer, loss, in_axes=(None, 0, 0, 0, 0, 0), out_axes=0
 )
 
+# Loading model and optimiser state if they exist
 model_path = path.join(config.get("training", "checkpoint_path"), "model.eqx")
 opt_state_path = path.join(config.get("training", "checkpoint_path"), "opt_state.eqx")
 if path.isfile(model_path) and path.isfile(opt_state_path):
     model = eqx.tree_deserialise_leaves(model_path, model)
     opt_state = eqx.tree_deserialise_leaves(opt_state_path, opt_state)
 
+# Optional configuration for logging to wandb
 if config.getboolean("training", "wandb"):
     wandb_config = dict(config["model"])
     wandb_config["epochs"] = config.getint("training", "epochs")
@@ -82,8 +84,10 @@ if config.getboolean("training", "wandb"):
         project=config.get("training", "wandb_project"),
         notes=config.get("training", "wandb_notes"),
         config=wandb_config,
+        
     )
 
+# Training loop
 checkpoint_freq = config.getint("training", "checkpoint_freq")
 use_wandb = config.getboolean("training", "wandb")
 
