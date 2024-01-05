@@ -36,7 +36,7 @@ dataloader = text.seq2seq_batched_iterator(
 )
 
 # load validation data
-if config.getboolean("validation", "use_validation"):
+if use_validation := config.getboolean("validation", "use_validation"):
     val_data = list(pickle.load(open(config.get("validation", "data_path"), "rb")))
     val_data = text.seq2seq_batched_iterator(
         val_data,
@@ -92,10 +92,10 @@ if use_checkpoint := config.getboolean("checkpoint", "use_checkpoint"):
         save_interval_steps=freq,
     )
     mngr = ocp.CheckpointManager(
-        checkpoint_path,
+        checkpoint_path.resolve(),
         {
-            "model": ocp.AsyncCheckpointer(ocp.PyTreeCheckpointHandler()),
-            "opt_state": ocp.AsyncCheckpointer(ocp.PyTreeCheckpointHandler()),
+            "model": ocp.PyTreeCheckpointer(),
+            "opt_state": ocp.PyTreeCheckpointer(),
         },
         options,
     )
@@ -126,7 +126,7 @@ if use_wandb := config.getboolean("wandb", "use_wandb"):
     del wandb_config
 
 # Process validation data
-if config.getboolean("validation", "use_validation"):
+if use_validation:
     Xdev, ydev, labeldev = next(val_data)
     Xdev, ydev, labeldev = [jnp.array(x) for x in (Xdev, ydev, labeldev)]
     Xdev_mask, ydev_mask = [text.create_pad_masks(x) for x in (Xdev, ydev)]
@@ -155,12 +155,16 @@ for e in range(config.getint("training", "epochs")):
                 model, opt_state, batch_loss = step(
                     model, opt_state, Xbt, ybt, Xmask, ymask, labelbt
                 )
-
                 total_loss += batch_loss
                 num_batches += 1
+                print(
+                    f"Batches trained: {num_batches} | Avg. Batch loss: {total_loss/num_batches}"
+                )
 
                 # Checkpoint model and optimiser state
-                if num_batches % freq == 0 and use_checkpoint:
+                if use_checkpoint:
+                    print(f"Step: {i * (e + 1)}")
+                    print(f"Should save: {mngr.should_save(i * (e + 1))}")
                     mngr.save(
                         i * (e + 1),
                         {
@@ -168,10 +172,6 @@ for e in range(config.getint("training", "epochs")):
                             "opt_state": opt_state,
                         }
                     )
-                    print(
-                        f"Batches trained: {num_batches} | Avg. Batch loss: {total_loss/num_batches}"
-                    )
-                    config.set("training", "batches_trained", str(num_batches))
 
                 # Log to wandb
                 if use_wandb:
@@ -179,11 +179,12 @@ for e in range(config.getint("training", "epochs")):
                         "training_loss": total_loss / num_batches,
                         "learning_rate": optimizer["learning_rate"],
                     }
-                    if config.getboolean("validation", "use_validation"):
+                    if use_validation:
                         log["validation_loss"] = vmapped_loss(
                             model, Xdev, ydev, Xdev_mask, ydev_mask, labeldev
                         )
                     wandb.log(log)
+                config.set("training", "batches_trained", str(num_batches))
 
         config.set("training", "epochs_trained", str(e + 1))
         epoch_loss = total_loss / num_batches
