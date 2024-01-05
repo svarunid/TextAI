@@ -1,17 +1,16 @@
 import configparser
+import os
 import pickle
-from os import makedirs, path
-from pathlib import Path
 
-import equinox as eqx
 import jax
-import jax.numpy as jnp
 import optax
+import wandb
+from etils import epath
 from jax import config as jax_config
-from jax.tree_util import tree_map
+from jax import numpy as jnp
+from orbax import checkpoint as ocp
 from spax.nn.utils import optim
 
-import wandb
 from helpers import spickle, text
 from models.transformer import transformer
 
@@ -20,7 +19,9 @@ jax_config.update("jax_debug_infs", True)
 
 # Loading transformer config
 config_dir = (
-    Path(path.dirname(path.realpath(__file__))).parent / "config" / "transformer.ini"
+    epath.Path(os.path.dirname(os.path.realpath(__file__))).parent
+    / "config"
+    / "transformer.ini"
 )
 config = configparser.ConfigParser()
 config.read(config_dir)
@@ -40,7 +41,7 @@ val_data = text.seq2seq_batched_iterator(
     val_data,
     config.getint("model", "in_seq_len"),
     config.getint("model", "out_seq_len"),
-    len(val_data),
+    len(list(val_data)),
 )
 
 # Initialize transformer model
@@ -73,23 +74,35 @@ def loss(model, X, y, X_mask, y_mask, labels):
 # The learning rate is then decayed using a cosine decay schedule for 2000 steps
 lr = config.getfloat("training", "lr")
 lr = optax.warmup_cosine_decay_schedule(lr, 0.1, 200, 2000, 0.0001)
-optimizer = optax.adam(learning_rate=lr)
+optimizer = optax.inject_hyperparams(optax.adam)(learning_rate=lr)
 
 opt_state, step = optim(
     model, optimizer, loss, in_axes=(None, 0, 0, 0, 0, 0), out_axes=0
 )
 
-# Make checkpoint directory if it doesn't exist
-if config.getboolean("checkpoint", "use_checkpoint"):
-    makedirs(config.get("checkpoint", "checkpoint_path"), exist_ok=True)
-    # Loading model and optimiser state if they exist
-    model_path = path.join(config.get("checkpoint", "checkpoint_path"), "model.eqx")
-    opt_state_path = path.join(
-        config.get("checkpoint", "checkpoint_path"), "opt_state.eqx"
+# Make checkpoint directory if it doesn't exist and initialize checkpoint manager
+if use_checkpoint := config.getboolean("checkpoint", "use_checkpoint"):
+    checkpoint_path = epath.Path(config.get("checkpoint", "path"))
+    checkpoint_path.mkdir(parents=True, exist_ok=True)
+    freq = config.get("checkpoint", "freq")
+    options = ocp.CheckpointManagerOptions(
+        max_to_keep=config.getint("checkpoint", "max_to_keep"),
+        save_interval_steps=config.getint("checkpoint", "freq"),
     )
-    if path.isfile(model_path) and path.isfile(opt_state_path):
-        model = eqx.tree_deserialise_leaves(model_path, model)
-        opt_state = eqx.tree_deserialise_leaves(opt_state_path, opt_state)
+    mngr = ocp.CheckpointManager(
+        checkpoint_path,
+        {
+            "model": ocp.AsyncCheckpointer(ocp.PyTreeCheckpointHandler()),
+            "opt_state": ocp.AsyncCheckpointer(ocp.PyTreeCheckpointHandler()),
+        },
+        options,
+    )
+    # Loading model and optimiser state if they exist
+    if mngr.latest_step() is not None:
+        mngr.wait_until_finished()
+        restored_items = mngr.restore(mngr.latest_step())
+        model = restored_items["model"]
+        opt_state = restored_items["opt_state"]
 
 # Optional configuration for logging to wandb
 if use_wandb := config.getboolean("wandb", "use_wandb"):
@@ -107,18 +120,16 @@ if use_wandb := config.getboolean("wandb", "use_wandb"):
         config=wandb_config,
     )
 
-# Load train loop config
-use_checkpoint = config.getboolean("checkpoint", "use_checkpoint")
-checkpoint_freq = config.getint("checkpoint", "checkpoint_freq")
-batches_trained = config.getint("training", "batches_trained")
-epochs_trained = config.getint("training", "epochs_trained")
-
 # Process validation data
 Xdev, ydev, labeldev = next(val_data)
 Xdev, ydev, labeldev = [jnp.array(x) for x in (Xdev, ydev, labeldev)]
 Xdev_mask, ydev_mask = [text.create_pad_masks(x) for x in (Xdev, ydev)]
 ydev_mask = ydev_mask[:, jnp.newaxis, :] + text.subsequent_mask(ydev_mask.shape[-1])
 vmapped_loss = jax.vmap(loss, in_axes=(None, 0, 0, 0, 0, 0), out_axes=0)
+
+# Load train loop config
+batches_trained = config.getint("training", "batches_trained")
+epochs_trained = config.getint("training", "epochs_trained")
 
 # Training loop
 print("Running...")
@@ -142,9 +153,14 @@ for e in range(config.getint("training", "epochs")):
                 num_batches += 1
 
                 # Checkpoint model and optimiser state
-                if num_batches % checkpoint_freq == 0 and use_checkpoint:
-                    eqx.tree_serialise_leaves(model_path, model)
-                    eqx.tree_serialise_leaves(opt_state_path, opt_state)
+                if num_batches % freq == 0 and use_checkpoint:
+                    mngr.save(
+                        i * (e + 1),
+                        {
+                            "model": model,
+                            "opt_state": opt_state,
+                        }
+                    )
                     print(
                         f"Batches trained: {num_batches} | Avg. Batch loss: {total_loss/num_batches}"
                     )
@@ -155,9 +171,12 @@ for e in range(config.getint("training", "epochs")):
                     wandb.log(
                         {
                             "training_loss": total_loss / num_batches,
-                            "validation_loss": vmapped_loss(
-                                model, Xdev, ydev, Xdev_mask, ydev_mask, labeldev
-                            ),
+                            "validation_loss": jnp.mean(
+                                vmapped_loss(
+                                    model, Xdev, ydev, Xdev_mask, ydev_mask, labeldev
+                                )
+                            ).item(),
+                            "learning_rate": optimizer["learning_rate"],
                         }
                     )
 

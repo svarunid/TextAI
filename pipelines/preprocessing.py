@@ -60,7 +60,7 @@ ytr, ydev, yte = (
 
 makedirs(config.get("tokenizer", "save_path"), exist_ok=True)
 
-spickle.sdump(config.get("tokenizer", "save_path") + "/src.spkl", zip(Xtr, ytr))
+spickle.sdump(config.get("tokenizer", "save_path") + "/train.spkl", zip(Xtr, ytr))
 pickle.dump(
     zip(Xdev, ydev), open(config.get("tokenizer", "save_path") + "/dev.pkl", "wb")
 )
