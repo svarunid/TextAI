@@ -36,13 +36,14 @@ dataloader = text.seq2seq_batched_iterator(
 )
 
 # load validation data
-val_data = pickle.load(open(config.get("validation", "data_path"), "rb"))
-val_data = text.seq2seq_batched_iterator(
-    val_data,
-    config.getint("model", "in_seq_len"),
-    config.getint("model", "out_seq_len"),
-    len(list(val_data)),
-)
+if config.getboolean("validation", "use_validation"):
+    val_data = list(pickle.load(open(config.get("validation", "data_path"), "rb")))
+    val_data = text.seq2seq_batched_iterator(
+        val_data,
+        config.getint("model", "in_seq_len"),
+        config.getint("model", "out_seq_len"),
+        len(val_data),
+    )
 
 # Initialize transformer model
 model, forward = transformer(
@@ -75,6 +76,7 @@ def loss(model, X, y, X_mask, y_mask, labels):
 lr = config.getfloat("training", "lr")
 lr = optax.warmup_cosine_decay_schedule(lr, 0.1, 200, 2000, 0.0001)
 optimizer = optax.inject_hyperparams(optax.adam)(learning_rate=lr)
+del lr
 
 opt_state, step = optim(
     model, optimizer, loss, in_axes=(None, 0, 0, 0, 0, 0), out_axes=0
@@ -84,10 +86,10 @@ opt_state, step = optim(
 if use_checkpoint := config.getboolean("checkpoint", "use_checkpoint"):
     checkpoint_path = epath.Path(config.get("checkpoint", "path"))
     checkpoint_path.mkdir(parents=True, exist_ok=True)
-    freq = config.get("checkpoint", "freq")
+    freq = config.getint("checkpoint", "freq")
     options = ocp.CheckpointManagerOptions(
         max_to_keep=config.getint("checkpoint", "max_to_keep"),
-        save_interval_steps=config.getint("checkpoint", "freq"),
+        save_interval_steps=freq,
     )
     mngr = ocp.CheckpointManager(
         checkpoint_path,
@@ -97,6 +99,8 @@ if use_checkpoint := config.getboolean("checkpoint", "use_checkpoint"):
         },
         options,
     )
+    del checkpoint_path, options
+
     # Loading model and optimiser state if they exist
     if mngr.latest_step() is not None:
         mngr.wait_until_finished()
@@ -119,13 +123,16 @@ if use_wandb := config.getboolean("wandb", "use_wandb"):
         name=config.get("wandb", "name"),
         config=wandb_config,
     )
+    del wandb_config
 
 # Process validation data
-Xdev, ydev, labeldev = next(val_data)
-Xdev, ydev, labeldev = [jnp.array(x) for x in (Xdev, ydev, labeldev)]
-Xdev_mask, ydev_mask = [text.create_pad_masks(x) for x in (Xdev, ydev)]
-ydev_mask = ydev_mask[:, jnp.newaxis, :] + text.subsequent_mask(ydev_mask.shape[-1])
-vmapped_loss = jax.vmap(loss, in_axes=(None, 0, 0, 0, 0, 0), out_axes=0)
+if config.getboolean("validation", "use_validation"):
+    Xdev, ydev, labeldev = next(val_data)
+    Xdev, ydev, labeldev = [jnp.array(x) for x in (Xdev, ydev, labeldev)]
+    Xdev_mask, ydev_mask = [text.create_pad_masks(x) for x in (Xdev, ydev)]
+    ydev_mask = ydev_mask[:, jnp.newaxis, :] + text.subsequent_mask(ydev_mask.shape[-1])
+    vmapped_loss = jax.vmap(loss, in_axes=(None, 0, 0, 0, 0, 0), out_axes=0)
+    del val_data # Delete validation data to free up memory
 
 # Load train loop config
 batches_trained = config.getint("training", "batches_trained")
@@ -168,17 +175,15 @@ for e in range(config.getint("training", "epochs")):
 
                 # Log to wandb
                 if use_wandb:
-                    wandb.log(
-                        {
-                            "training_loss": total_loss / num_batches,
-                            "validation_loss": jnp.mean(
-                                vmapped_loss(
-                                    model, Xdev, ydev, Xdev_mask, ydev_mask, labeldev
-                                )
-                            ).item(),
-                            "learning_rate": optimizer["learning_rate"],
-                        }
-                    )
+                    log = {
+                        "training_loss": total_loss / num_batches,
+                        "learning_rate": optimizer["learning_rate"],
+                    }
+                    if config.getboolean("validation", "use_validation"):
+                        log["validation_loss"] = vmapped_loss(
+                            model, Xdev, ydev, Xdev_mask, ydev_mask, labeldev
+                        )
+                    wandb.log(log)
 
         config.set("training", "epochs_trained", str(e + 1))
         epoch_loss = total_loss / num_batches
