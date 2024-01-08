@@ -89,8 +89,8 @@ if use_checkpoint := config.getboolean("checkpoint", "use_checkpoint"):
     model_path = epath.Path(config.get("checkpoint", "path")) / "model.eqx"
     opt_state_path = epath.Path(config.get("checkpoint", "path")) / "opt_state.eqx"
     if model_path.exists() and opt_state_path.exists():
-        model = eqx.tree_deserialise_leaves(model_path, model)
-        opt_state = eqx.tree_deserialise_leaves(opt_state_path, opt_state)
+        model = eqx.tree_deserialise_leaves(model_path.as_posix(), model)
+        opt_state = eqx.tree_deserialise_leaves(opt_state_path.as_posix(), opt_state)
     # checkpoint_path = epath.Path(config.get("checkpoint", "path"))
     # if checkpoint_path.exists() and config.getboolean("checkpoint", "overwrite"):
     #     checkpoint_path.rmtree()
@@ -170,11 +170,12 @@ for e in range(config.getint("training", "epochs")):
                 # Checkpoint model and optimiser state
                 if use_checkpoint:
                     if num_batches % freq == 0:
-                        eqx.tree_serialise_leaves(model_path, model)
-                        eqx.tree_serialise_leaves(opt_state_path, opt_state)
-                    with open(config_dir, "w") as f:
-                        config.set("training", "batches_trained", str(num_batches))
-                        config.write(f)
+                        print(f"Loss: {total_loss / num_batches}")
+                        eqx.tree_serialise_leaves(model_path.as_posix(), model)
+                        eqx.tree_serialise_leaves(opt_state_path.as_posix(), opt_state)
+                        with open(config_dir, "w") as f:
+                            config.set("training", "batches_trained", str(num_batches))
+                            config.write(f)
                     # print(f"Step: {i * (e + 1)}")
                     # print(f"Should save: {mngr.should_save(i * (e + 1))}")
                     # mngr.save(
@@ -197,6 +198,8 @@ for e in range(config.getint("training", "epochs")):
                         )
                     wandb.log(log)
 
-        config.set("training", "epochs_trained", str(e + 1))
+        with open(config_dir, "w") as f:
+            config.set("training", "epochs_trained", str(e + 1))
+            config.write(f)
         epoch_loss = total_loss / num_batches
         print(f"Epoch {e} | loss: {epoch_loss}")
