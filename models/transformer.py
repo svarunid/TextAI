@@ -1,7 +1,7 @@
 import jax
 from jax import numpy as jnp
-from spax.nn.linear import Embedding, Linear, embedding, linear
-from spax.nn.transformers import Decoder, Encoder, decoder, encoder
+from spax.nn.linear import Embedding, Linear, embedding, linear, Sequential, sequential
+from spax.nn.transformers import DecoderLayer, EncoderLayer, decoder_layer, encoder_layer
 from spax.struct import field, struct
 
 
@@ -9,8 +9,8 @@ from spax.struct import field, struct
 class Transformer:
     in_emb: Embedding
     out_emb: Embedding
-    encoder: Encoder
-    decoder: Decoder
+    encoder: Sequential
+    decoder: Sequential
     linear: Linear
     in_pe: jax.Array = field(leaf=False)
     out_pe: jax.Array = field(leaf=False)
@@ -31,8 +31,8 @@ def transformer(
     in_emb_key, out_emb_key, enc_key, dec_key, linear_key = jax.random.split(key, num=5)
     in_emb, emb_forward = embedding(in_emb_key, in_vocab_size, d_model)
     out_emb, _ = embedding(out_emb_key, out_vocab_size, d_model)
-    encoder_layer, enc_forward = encoder(enc_key, enc_layers, n_heads, d_model, d_ff)
-    decoder_layer, dec_forward = decoder(dec_key, dec_layers, n_heads, d_model, d_ff)
+    encoder_layers, enc_forward = Sequential(encoder_layer(enc_key, n_heads, d_model, d_ff) for _ in range(enc_layers))
+    decoder_layers, dec_forward = Sequential(decoder_layer(dec_key, n_heads, d_model, d_ff) for _ in range(dec_layers))
     linear_layer, lin_forward = linear(linear_key, d_model, out_vocab_size)
 
     in_pos = jnp.arange(in_seq_len)[:, jnp.newaxis]
@@ -48,7 +48,7 @@ def transformer(
     out_pe = out_pe.at[:, 1::2].set(jnp.cos(out_pos / div_term))
 
     model = Transformer(
-        in_emb, out_emb, encoder_layer, decoder_layer, linear_layer, in_pe, out_pe
+        in_emb, out_emb, encoder_layers, decoder_layers, linear_layer, in_pe, out_pe
     )
 
     @jax.jit
@@ -59,8 +59,8 @@ def transformer(
         y = emb_forward(model.out_emb, y)
         y = y + model.out_pe
 
-        X = enc_forward(model.encoder, X, X_mask)
-        y = dec_forward(model.decoder, y, X, y_mask, X_mask)
+        X = enc_forward(model.encoder, X, common_args=(X_mask,))
+        y = dec_forward(model.decoder, y, common_args=(X, y_mask, X_mask))
 
         return lin_forward(model.linear, y)
 
