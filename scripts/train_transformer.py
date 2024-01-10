@@ -44,6 +44,11 @@ if use_validation := config.getboolean("validation", "use_validation"):
         config.getint("model", "out_seq_len"),
         len(val_data),
     )
+    Xdev, ydev, labeldev = next(val_data)
+    Xdev, ydev, labeldev = [jnp.array(x) for x in (Xdev, ydev, labeldev)]
+    Xdev_mask, ydev_mask = [text.create_pad_masks(x) for x in (Xdev, ydev)]
+    ydev_mask = ydev_mask[:, jnp.newaxis, :] + text.subsequent_mask(ydev_mask.shape[-1])
+    del val_data  # Delete validation data to free up memory
 
 # Initialize transformer model
 model, forward = transformer(
@@ -70,6 +75,8 @@ def loss(model, X, y, Xmask, ymask, labels):
     count = jnp.count_nonzero(yhat)
     return -jnp.sum(yhat) / count
 
+if use_validation:
+    vmapped_loss = jax.vmap(loss, in_axes=(None, 0, 0, 0, 0, 0), out_axes=0)
 
 # Defining optimiser
 # A linear warmup is used for the first 200 steps upto a peak learning rate of 0.1
@@ -84,6 +91,8 @@ opt_state, step = optim(
 )
 
 # Make checkpoint directory if it doesn't exist and initialize checkpoint manager
+batches_trained = 0
+epochs_trained = 0
 if use_checkpoint := config.getboolean("checkpoint", "use_checkpoint"):
     freq = config.getint("checkpoint", "freq")
     checkpoint_path = epath.Path(config.get("checkpoint", "path"))
@@ -97,21 +106,27 @@ if use_checkpoint := config.getboolean("checkpoint", "use_checkpoint"):
     mngr = ocp.CheckpointManager(
         checkpoint_path.resolve(),
         {
-            "model": ocp.AsyncCheckpointer(ocp.PyTreeCheckpointHandler(ocdbt_merge=False)),
-            "opt_state": ocp.AsyncCheckpointer(ocp.PyTreeCheckpointHandler(ocdbt_merge=False)),
+            "model": ocp.AsyncCheckpointer(
+                ocp.PyTreeCheckpointHandler(ocdbt_merge=False)
+            ),
+            "opt_state": ocp.AsyncCheckpointer(
+                ocp.PyTreeCheckpointHandler(ocdbt_merge=False)
+            ),
         },
         options,
     )
     del checkpoint_path, options
 
-    # Loading model and optimiser state if they exist
-    batches_trained = 0
+    # Loading model, optimiser state and training loop config if checkpoint exists
     if mngr.latest_step() is not None:
         mngr.wait_until_finished()
         restored_items = mngr.restore(mngr.latest_step())
         model = restored_items["model"]
         opt_state = restored_items["opt_state"]
         batches_trained = mngr.latest_step()
+        if num_batches := config.getint("training", "num_batches", fallback=0):
+            batches_trained = batches_trained % num_batches
+            epochs_trained = batches_trained // num_batches
 
 # Optional configuration for logging to wandb
 if use_wandb := config.getboolean("wandb", "use_wandb"):
@@ -129,22 +144,6 @@ if use_wandb := config.getboolean("wandb", "use_wandb"):
         config=wandb_config,
     )
     del wandb_config
-
-# Process validation data
-if use_validation:
-    Xdev, ydev, labeldev = next(val_data)
-    Xdev, ydev, labeldev = [jnp.array(x) for x in (Xdev, ydev, labeldev)]
-    Xdev_mask, ydev_mask = [text.create_pad_masks(x) for x in (Xdev, ydev)]
-    ydev_mask = ydev_mask[:, jnp.newaxis, :] + text.subsequent_mask(ydev_mask.shape[-1])
-    vmapped_loss = jax.vmap(loss, in_axes=(None, 0, 0, 0, 0, 0), out_axes=0)
-    del val_data # Delete validation data to free up memory
-
-# Load train loop config
-epochs_trained = 0
-if batches_trained:
-    if num_batches := config.getint("training", "num_batches", fallback=0):
-        batches_trained = batches_trained % num_batches
-        epochs_trained = batches_trained // num_batches
 
 # Training loop
 print("Running...")
@@ -174,14 +173,14 @@ for e in range(config.getint("training", "epochs")):
                             {
                                 "model": model,
                                 "opt_state": opt_state,
-                            }
+                            },
                         )
 
                 # Log to wandb
                 if use_wandb:
                     log = {
                         "training_loss": total_loss / num_batches,
-                        "learning_rate": optimizer["learning_rate"],
+                        "learning_rate": opt_state.hyperparams["learning_rate"],
                     }
                     if use_validation:
                         log["validation_loss"] = vmapped_loss(
