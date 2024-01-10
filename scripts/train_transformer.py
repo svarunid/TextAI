@@ -61,13 +61,14 @@ model, forward = transformer(
 
 
 # Defining loss function
-# Accepts padded lables too
+# Expects labels to be padded
 @jax.jit
-def loss(model, X, y, X_mask, y_mask, labels):
-    y_pred = jnp.log(forward(model, X, y, X_mask, y_mask))
-    y_pred = jnp.where(labels == 0, 0, jnp.take(y_pred, labels, axis=-1))
-    count = jnp.count_nonzero(y_pred)
-    return -jnp.sum(y_pred) / count
+def loss(model, X, y, Xmask, ymask, labels):
+    yhat = forward(model, X, y, Xmask, ymask)
+    yhat = jax.nn.log_softmax(yhat, axis=-1)
+    yhat = jnp.where(labels == 0, 0, jnp.take(yhat, labels, axis=-1))
+    count = jnp.count_nonzero(yhat)
+    return -jnp.sum(yhat) / count
 
 
 # Defining optimiser
@@ -187,7 +188,7 @@ for e in range(config.getint("training", "epochs")):
                             model, Xdev, ydev, Xdev_mask, ydev_mask, labeldev
                         )
                     wandb.log(log)
-                    
+
         if e == 0:
             with open(config_dir, "w") as f:
                 config.set("training", "num_batches", str(num_batches))

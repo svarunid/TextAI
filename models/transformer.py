@@ -62,7 +62,6 @@ def transformer(
         X = enc_forward(model.encoder, X, X_mask)
         y = dec_forward(model.decoder, y, X, y_mask, X_mask)
 
-        y = lin_forward(model.linear, y)
-        return jax.nn.softmax(y)
+        return lin_forward(model.linear, y)
 
     return model, forward
