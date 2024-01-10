@@ -1,7 +1,7 @@
 import jax
 from jax import numpy as jnp
 from spax.nn.linear import Embedding, Linear, embedding, linear, Sequential, sequential
-from spax.nn.transformers import DecoderLayer, EncoderLayer, decoder_layer, encoder_layer
+from spax.nn.transformers import decoder_layer, encoder_layer
 from spax.struct import field, struct
 
 
@@ -31,8 +31,16 @@ def transformer(
     in_emb_key, out_emb_key, enc_key, dec_key, linear_key = jax.random.split(key, num=5)
     in_emb, emb_forward = embedding(in_emb_key, in_vocab_size, d_model)
     out_emb, _ = embedding(out_emb_key, out_vocab_size, d_model)
-    encoder_layers, enc_forward = Sequential(encoder_layer(enc_key, n_heads, d_model, d_ff) for _ in range(enc_layers))
-    decoder_layers, dec_forward = Sequential(decoder_layer(dec_key, n_heads, d_model, d_ff) for _ in range(dec_layers))
+    encoder_layers, enc_forward = sequential(
+        *tuple(
+            encoder_layer(enc_key, n_heads, d_model, d_ff) for _ in range(enc_layers)
+        )
+    )
+    decoder_layers, dec_forward = sequential(
+        *tuple(
+            decoder_layer(dec_key, n_heads, d_model, d_ff) for _ in range(dec_layers)
+        )
+    )
     linear_layer, lin_forward = linear(linear_key, d_model, out_vocab_size)
 
     in_pos = jnp.arange(in_seq_len)[:, jnp.newaxis]

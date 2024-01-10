@@ -77,6 +77,7 @@ def loss(model, X, y, Xmask, ymask, labels):
     count = jnp.count_nonzero(yhat)
     return -jnp.sum(yhat) / count
 
+
 if use_validation:
     vmapped_loss = jax.vmap(loss, in_axes=(None, 0, 0, 0, 0, 0), out_axes=0)
 
