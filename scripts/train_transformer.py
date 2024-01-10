@@ -2,7 +2,6 @@ import configparser
 import os
 import pickle
 
-import equinox as eqx
 import jax
 import optax
 import wandb
@@ -86,35 +85,32 @@ opt_state, step = optim(
 # Make checkpoint directory if it doesn't exist and initialize checkpoint manager
 if use_checkpoint := config.getboolean("checkpoint", "use_checkpoint"):
     freq = config.getint("checkpoint", "freq")
-    model_path = epath.Path(config.get("checkpoint", "path")) / "model.eqx"
-    opt_state_path = epath.Path(config.get("checkpoint", "path")) / "opt_state.eqx"
-    if model_path.exists() and opt_state_path.exists():
-        model = eqx.tree_deserialise_leaves(model_path.as_posix(), model)
-        opt_state = eqx.tree_deserialise_leaves(opt_state_path.as_posix(), opt_state)
-    # checkpoint_path = epath.Path(config.get("checkpoint", "path"))
-    # if checkpoint_path.exists() and config.getboolean("checkpoint", "overwrite"):
-    #     checkpoint_path.rmtree()
-    #     checkpoint_path.mkdir(parents=True, exist_ok=True)
-    # options = ocp.CheckpointManagerOptions(
-    #     max_to_keep=config.getint("checkpoint", "max_to_keep"),
-    #     save_interval_steps=freq,
-    # )
-    # mngr = ocp.CheckpointManager(
-    #     checkpoint_path.resolve(),
-    #     {
-    #         "model": ocp.PyTreeCheckpointer(),
-    #         "opt_state": ocp.PyTreeCheckpointer(),
-    #     },
-    #     options,
-    # )
-    # del checkpoint_path, options
+    checkpoint_path = epath.Path(config.get("checkpoint", "path"))
+    if checkpoint_path.exists() and config.getboolean("checkpoint", "overwrite"):
+        checkpoint_path.rmtree()
+        checkpoint_path.mkdir(parents=True, exist_ok=True)
+    options = ocp.CheckpointManagerOptions(
+        max_to_keep=config.getint("checkpoint", "max_to_keep"),
+        save_interval_steps=freq,
+    )
+    mngr = ocp.CheckpointManager(
+        checkpoint_path.resolve(),
+        {
+            "model": ocp.AsyncCheckpointer(ocp.PyTreeCheckpointHandler(ocdbt_merge=False)),
+            "opt_state": ocp.AsyncCheckpointer(ocp.PyTreeCheckpointHandler(ocdbt_merge=False)),
+        },
+        options,
+    )
+    del checkpoint_path, options
 
-    # # Loading model and optimiser state if they exist
-    # if mngr.latest_step() is not None:
-    #     mngr.wait_until_finished()
-    #     restored_items = mngr.restore(mngr.latest_step())
-    #     model = restored_items["model"]
-    #     opt_state = restored_items["opt_state"]
+    # Loading model and optimiser state if they exist
+    batches_trained = 0
+    if mngr.latest_step() is not None:
+        mngr.wait_until_finished()
+        restored_items = mngr.restore(mngr.latest_step())
+        model = restored_items["model"]
+        opt_state = restored_items["opt_state"]
+        batches_trained = mngr.latest_step()
 
 # Optional configuration for logging to wandb
 if use_wandb := config.getboolean("wandb", "use_wandb"):
@@ -143,8 +139,11 @@ if use_validation:
     del val_data # Delete validation data to free up memory
 
 # Load train loop config
-batches_trained = config.getint("training", "batches_trained")
-epochs_trained = config.getint("training", "epochs_trained")
+epochs_trained = 0
+if batches_trained:
+    if num_batches := config.getint("training", "num_batches", fallback=0):
+        batches_trained = batches_trained % num_batches
+        epochs_trained = batches_trained // num_batches
 
 # Training loop
 print("Running...")
@@ -164,27 +163,18 @@ for e in range(config.getint("training", "epochs")):
                     model, opt_state, Xbt, ybt, Xmask, ymask, labelbt
                 )
                 total_loss += batch_loss
-                num_batches += 1
+                num_batches = i + 1
 
-                config.set("training", "batches_trained", str(num_batches))
                 # Checkpoint model and optimiser state
                 if use_checkpoint:
-                    if num_batches % freq == 0:
-                        print(f"Loss: {total_loss / num_batches}")
-                        eqx.tree_serialise_leaves(model_path.as_posix(), model)
-                        eqx.tree_serialise_leaves(opt_state_path.as_posix(), opt_state)
-                        with open(config_dir, "w") as f:
-                            config.set("training", "batches_trained", str(num_batches))
-                            config.write(f)
-                    # print(f"Step: {i * (e + 1)}")
-                    # print(f"Should save: {mngr.should_save(i * (e + 1))}")
-                    # mngr.save(
-                    #     i * (e + 1),
-                    #     {
-                    #         "model": model,
-                    #         "opt_state": opt_state,
-                    #     }
-                    # )
+                    if i % freq == 0:
+                        mngr.save(
+                            i * (e + 1),
+                            {
+                                "model": model,
+                                "opt_state": opt_state,
+                            }
+                        )
 
                 # Log to wandb
                 if use_wandb:
@@ -197,9 +187,10 @@ for e in range(config.getint("training", "epochs")):
                             model, Xdev, ydev, Xdev_mask, ydev_mask, labeldev
                         )
                     wandb.log(log)
-
-        with open(config_dir, "w") as f:
-            config.set("training", "epochs_trained", str(e + 1))
-            config.write(f)
+                    
+        if e == 0:
+            with open(config_dir, "w") as f:
+                config.set("training", "num_batches", str(num_batches))
+                config.write(f)
         epoch_loss = total_loss / num_batches
         print(f"Epoch {e} | loss: {epoch_loss}")
