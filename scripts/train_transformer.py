@@ -14,6 +14,8 @@ from spax.nn.utils import optim
 from helpers import spickle, text
 from models.transformer import transformer
 
+# TODO: Use common loop utils.
+
 jax_config.update("jax_debug_nans", True)
 jax_config.update("jax_debug_infs", True)
 
