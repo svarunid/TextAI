@@ -9,12 +9,12 @@ from etils import epath
 from jax import config as jax_config
 from jax import numpy as jnp
 from orbax import checkpoint as ocp
-from spax.nn.utils import optim
 
-from helpers import spickle, text
-from models.transformer import transformer
+from textai.helpers import spickle, text
+from textai.models.transformer import transformer
 
 # TODO: Use common loop utils.
+# TODO: Use tf.data for the input pipeline.
 
 jax_config.update("jax_debug_nans", True)
 jax_config.update("jax_debug_infs", True)
@@ -78,20 +78,26 @@ def loss(model, X, y, Xmask, ymask, labels):
     return -jnp.sum(yhat) / count
 
 
-if use_validation:
-    vmapped_loss = jax.vmap(loss, in_axes=(None, 0, 0, 0, 0, 0), out_axes=0)
-
 # Defining optimiser
 # A linear warmup is used for the first 200 steps upto a peak learning rate of 0.1
 # The learning rate is then decayed using a cosine decay schedule for 2000 steps
 lr = config.getfloat("training", "lr")
 lr = optax.warmup_cosine_decay_schedule(lr, 0.1, 200, 2000, 0.0001)
+vmapped_loss = jax.vmap(loss, in_axes=(None, 0, 0, 0, 0, 0), out_axes=0)
 optimizer = optax.inject_hyperparams(optax.adam)(learning_rate=lr)
 del lr
 
-opt_state, step = optim(
-    model, optimizer, loss, in_axes=(None, 0, 0, 0, 0, 0), out_axes=0
-)
+# Defining training step
+def step(model, opt_state, X, y, Xmask, ymask, labels):
+    loss, grads = jax.gvalue_and_grad(vmapped_loss)(model, X, y, Xmask, ymask, labels)
+    loss = jnp.mean(loss)
+    grads = jax.tree_util.tree_map(lambda x: jnp.nan_to_num(x), grads)
+    updates, opt_state = optimizer.update(grads, opt_state, model)
+    model = optax.apply_updates(model, updates)
+    return model, opt_state, loss
+
+# Initialize optimiser state
+opt_state = optimizer.init(model)
 
 # Make checkpoint directory if it doesn't exist and initialize checkpoint manager
 batches_trained = 0
@@ -110,10 +116,10 @@ if use_checkpoint := config.getboolean("checkpoint", "use_checkpoint"):
         checkpoint_path.resolve(),
         {
             "model": ocp.AsyncCheckpointer(
-                ocp.PyTreeCheckpointHandler(ocdbt_merge=False)
+                ocp.PyTreeCheckpointHandler()
             ),
             "opt_state": ocp.AsyncCheckpointer(
-                ocp.PyTreeCheckpointHandler(ocdbt_merge=False)
+                ocp.PyTreeCheckpointHandler()
             ),
         },
         options,
