@@ -213,11 +213,15 @@ class Transformer(nn.Module):
 
     @nn.compact
     def __call__(self, inputs, targets) -> jax.Array:
-        input_mask = nn.make_attention_mask()
-        target_mask = nn.combine_masks(
-            nn.make_attention_mask(targets > 0, targets > 0),
-            nn.make_causal_mask(targets)
-        )
+        if self.config.decode:
+            input_mask = nn.make_attention_mask(jnp.ones_like(targets) > 0, inputs > 0)
+            target_mask = None
+        else:
+            input_mask = nn.make_attention_mask()
+            target_mask = nn.combine_masks(
+                nn.make_attention_mask(targets > 0, targets > 0),
+                nn.make_causal_mask(targets)
+            )
         enc = Encoder(self.config)(inputs, input_mask)
         dec = Decoder(self.config)(targets, enc, input_mask, target_mask)
         logits = nn.Dense(
