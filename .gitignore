@@ -1,8 +1,8 @@
 .*/
 /checkpoint/
 /data/
-/spaxnmt.egg-info/
 /wandb/
+**/*.egg-info/
 **/__pycache__/
 **/*.*pkl
 **/*.model

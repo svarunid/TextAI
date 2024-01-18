@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "textai" 
+dynamic = ["version"]
+description = "A personal package for machine translation models"
+dependencies = [
+    "jax>=0.4.0",
+    "jaxlib>=0.4.0",
+    "flax>=0.7.5",
+    "numpy>=1.26.0",
+    "optax>=0.1.8",
+    "wandb>=0.16.1",
+    "tensorflow>=2.12.0",
+    "sentencepiece>=0.1.99",
+    "orbax>=0.1.9",
+    "clu @ git+https://github.com/google/CommonLoopUtils"
+]
+
+[tool.setuptools]
+package-dir = { "textai" = "textai" }
+
+[project.optional-dependencies]
+dev = [
+    "black>=21.6b0",
+    "isort>=5.9.2",
+]

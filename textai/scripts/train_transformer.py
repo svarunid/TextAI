@@ -10,7 +10,7 @@ from jax import config as jax_config
 from jax import numpy as jnp
 from orbax import checkpoint as ocp
 
-from textai.models.transformer import transformer
+import textai.models.transformer as transformer
 
 # TODO: Use common loop utils.
 # TODO: Use tf.data for the input pipeline.
