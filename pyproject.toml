@@ -3,9 +3,9 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "textai" 
+name = "tai" 
 dynamic = ["version"]
-description = "A personal package for machine translation models"
+description = "Text AI: Deep Neural Network Architectures for Text Based Tasks"
 dependencies = [
     "jax>=0.4.0",
     "jaxlib>=0.4.0",
@@ -21,10 +21,11 @@ dependencies = [
 license = { file = "LICENSE" }
 
 [tool.setuptools]
-package-dir = { "textai" = "textai" }
+package-dir = { "tai" = "tai" }
 
 [project.optional-dependencies]
 dev = [
     "black>=21.6b0",
     "isort>=5.9.2",
+    "pytest>=7.4.4",
 ]
