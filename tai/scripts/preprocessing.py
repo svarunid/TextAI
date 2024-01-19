@@ -1,13 +1,12 @@
+from functools import partial
 from os import makedirs, path
 from pathlib import Path
+
 import sentencepiece as spm
 import yaml
-from functools import partial
 
 root_dir = Path(path.dirname(path.realpath(__file__))).parent.parent
-config_dir = (
-    root_dir / "config" / "preprocessing.yaml"
-)
+config_dir = root_dir / "config" / "preprocessing.yaml"
 with open(config_dir, "r") as f:
     config = yaml.load(f, Loader=yaml.Loader)
 
@@ -22,15 +21,15 @@ if input_type == "text":
 
     train_transformer = partial(
         spm.SentencePieceTrainer.train,
-        model_type = data_config["model"],
-        normalization_rule_name = data_config["norm_rule"],
-        shuffle_input_sentence = data_config["shuffle"],
-        input_sentence_size = data_config["sample_size"],
-        pad_id = 0,
-        unk_id = 1,
-        bos_id = 2,
-        eos_id = 3,
-        unk_surface = "<unk>",
+        model_type=data_config["model"],
+        normalization_rule_name=data_config["norm_rule"],
+        shuffle_input_sentence=data_config["shuffle"],
+        input_sentence_size=data_config["sample_size"],
+        pad_id=0,
+        unk_id=1,
+        bos_id=2,
+        eos_id=3,
+        unk_surface="<unk>",
     )
 
     tok_path = Path("tokenizer").joinpath(*data_path.parts[1:])
@@ -40,10 +39,10 @@ if input_type == "text":
 
     if task == "seq2seq":
         train_transformer(
-            input = str((root_dir / data_path  / task_config["src"])),
-            model_prefix = str((root_dir / tok_path / task_config["src"].split(".")[0])),
+            input=str((root_dir / data_path / task_config["src"])),
+            model_prefix=str((root_dir / tok_path / task_config["src"].split(".")[0])),
         )
         train_transformer(
-            input = str((root_dir / data_path  / task_config["tgt"])),
-            model_prefix = str((root_dir / tok_path / task_config["tgt"].split(".")[0])),
+            input=str((root_dir / data_path / task_config["tgt"])),
+            model_prefix=str((root_dir / tok_path / task_config["tgt"].split(".")[0])),
         )

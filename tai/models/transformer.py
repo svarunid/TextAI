@@ -1,31 +1,30 @@
-import flax.linen as nn
-from flax import struct
-import jax
-from jax import lax
+from typing import Callable, Dict, Optional
 
+import flax.linen as nn
+import jax
 import jax.numpy as jnp
 import numpy as np
+from flax import struct
+from jax import lax
 
-from typing import Callable, Optional, Dict
 
-
-def sinusoidal_init(max_len: int, max_scale: float = 1., min_scale: float = 10_000.) -> jax.Array:
+def sinusoidal_init(
+    max_len: int, max_scale: float = 1.0, min_scale: float = 10_000.0
+) -> jax.Array:
     def init(key, shape, dtype=np.float32):
         del key, dtype
         dim = shape[-1]
         position = np.arange(0, max_len)[:, jnp.newaxis]
-        scale_factor = (max_scale / min_scale)  ** (2 * jnp.arange(0, dim, 2) / dim)
+        scale_factor = (max_scale / min_scale) ** (2 * jnp.arange(0, dim, 2) / dim)
         div_term = np.divide(1, scale_factor)
         pe = np.empty((max_len, dim), dtype=np.float32)
         pe[:, 0::2] = np.sin(position * div_term)
         pe[:, 1::2] = np.cos(position * div_term)
         pe = pe[np.newaxis, :, :]
         return jnp.array(pe)
+
     return init
 
-def subsequent_mask(size: int) -> jax.Array:
-    mask = jnp.triu(jnp.ones((size, size)), k=1).astype('bool')
-    return mask
 
 @struct.dataclass
 class TransformerConfig:
@@ -57,12 +56,13 @@ class TransformerConfig:
             max_len=config["max_len"],
             dropout=config["dropout"],
             deterministic=config["deterministic"],
-            decode=config["decode"]
+            decode=config["decode"],
         )
+
 
 class PosEmbedding(nn.Module):
     config: TransformerConfig
-    
+
     @nn.compact
     def __call__(self, inputs) -> jax.Array:
         length = inputs.shape[1]
@@ -70,9 +70,7 @@ class PosEmbedding(nn.Module):
         if self.config.pos_emb_init is None:
             pos_emb = sinusoidal_init(self.config.max_len)(None, pos_emb_shape)
         else:
-            pos_emb = self.param(
-                'pos_emb', self.config.pos_emb_init, pos_emb_shape
-            )
+            pos_emb = self.param("pos_emb", self.config.pos_emb_init, pos_emb_shape)
         pe = pos_emb[:, :length, :]
 
         if self.config.decode:
@@ -87,9 +85,10 @@ class PosEmbedding(nn.Module):
                 pe = lax.dynamic_slice(pos_emb, jnp.array((0, i, 0)), (1, 1, df))
         return inputs + pe
 
+
 class MLP(nn.Module):
     config: TransformerConfig
-    
+
     @nn.compact
     def __call__(self, inputs) -> jax.Array:
         x = nn.Dense(
@@ -111,10 +110,11 @@ class MLP(nn.Module):
         )
         x = nn.LayerNorm()(x + inputs)
         return x
-    
+
+
 class EncoderLayer(nn.Module):
     config: TransformerConfig
-    
+
     @nn.compact
     def __call__(self, inputs, mask) -> jax.Array:
         x = nn.MultiHeadDotProductAttention(
@@ -134,10 +134,11 @@ class EncoderLayer(nn.Module):
         y = MLP(self.config)(x)
         y = nn.LayerNorm()(y + x)
         return y
-    
+
+
 class DecoderLayer(nn.Module):
     config: TransformerConfig
-    
+
     @nn.compact
     def __call__(self, inputs, enc_out, enc_mask, input_mask) -> jax.Array:
         x = nn.MultiHeadDotProductAttention(
@@ -173,6 +174,7 @@ class DecoderLayer(nn.Module):
         z = nn.LayerNorm()(z + y)
         return z
 
+
 class Encoder(nn.Module):
     config: TransformerConfig
 
@@ -188,7 +190,8 @@ class Encoder(nn.Module):
         for i in range(self.config.num_layers):
             x = EncoderLayer(self.config, name=f"encoder_layer_{i}")(x, mask)
         return x
-    
+
+
 class Decoder(nn.Module):
     config: TransformerConfig
 
@@ -207,6 +210,7 @@ class Decoder(nn.Module):
             )
         return x
 
+
 class Transformer(nn.Module):
     config: TransformerConfig
 
@@ -219,7 +223,7 @@ class Transformer(nn.Module):
             input_mask = nn.make_attention_mask()
             target_mask = nn.combine_masks(
                 nn.make_attention_mask(targets > 0, targets > 0),
-                nn.make_causal_mask(targets)
+                nn.make_causal_mask(targets),
             )
         enc = Encoder(self.config)(inputs, input_mask)
         dec = Decoder(self.config)(targets, enc, input_mask, target_mask)

@@ -86,6 +86,7 @@ vmapped_loss = jax.vmap(loss, in_axes=(None, 0, 0, 0, 0, 0), out_axes=0)
 optimizer = optax.inject_hyperparams(optax.adam)(learning_rate=lr)
 del lr
 
+
 # Defining training step
 def step(model, opt_state, X, y, Xmask, ymask, labels):
     loss, grads = jax.gvalue_and_grad(vmapped_loss)(model, X, y, Xmask, ymask, labels)
@@ -94,6 +95,7 @@ def step(model, opt_state, X, y, Xmask, ymask, labels):
     updates, opt_state = optimizer.update(grads, opt_state, model)
     model = optax.apply_updates(model, updates)
     return model, opt_state, loss
+
 
 # Initialize optimiser state
 opt_state = optimizer.init(model)
@@ -114,12 +116,8 @@ if use_checkpoint := config.getboolean("checkpoint", "use_checkpoint"):
     mngr = ocp.CheckpointManager(
         checkpoint_path.resolve(),
         {
-            "model": ocp.AsyncCheckpointer(
-                ocp.PyTreeCheckpointHandler()
-            ),
-            "opt_state": ocp.AsyncCheckpointer(
-                ocp.PyTreeCheckpointHandler()
-            ),
+            "model": ocp.AsyncCheckpointer(ocp.PyTreeCheckpointHandler()),
+            "opt_state": ocp.AsyncCheckpointer(ocp.PyTreeCheckpointHandler()),
         },
         options,
     )

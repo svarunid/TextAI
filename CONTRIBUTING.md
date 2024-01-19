@@ -35,6 +35,7 @@ virtualenv venv
 source venv/bin/activate
 
 micromamba create -n venv python=3.11
+micromamba activate venv
 ```
 3. Install the python packages in editable mode.
 ```bash
