@@ -8,7 +8,7 @@ A repository hosting deep neural network architectures trained for text based ta
 3. [License](#license)
 
 ## Introduction
-Text based tasks are one of the most common tasks in the industry. These include tasks such as text classification, text generation, text summarization, etc. This is a grate place for beginners to familiarize themselves with the deep learning model training pipeline. `textai` directory contains the code for the models, pipelines and scripts. This repository is a work in progress and will be updated regularly.
+Text based tasks are one of the most common tasks in the industry. These include tasks such as text classification, text generation, text summarization, etc. This is a great place for beginners to familiarize themselves with the deep learning model training pipeline. `textai` directory contains the code for the models, pipelines and scripts. This repository is a work in progress and will be updated regularly.
 
 ## Contributing
 Contributions to this repository are very much welcomed! Since I'm a beginner myself, I'm sure there are many things that can be improved. Please feel free to open an issue or submit a pull request.
