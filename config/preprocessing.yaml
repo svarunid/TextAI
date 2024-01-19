@@ -1,0 +1,19 @@
+input_type: text
+train_size: 0.7
+dev_size: 0.15
+test_size: 0.15
+shuffle: True
+path: data/translation/europarl/en_fr
+
+text:
+  model: bpe
+  sample_size: 1_000_000
+  task: seq2seq
+  norm_rule: nmt_nfkc # One of [nmt_nfkc, nmt_nfkc_cf, nfkc_cf, nfkc, identity]
+  shuffle: True
+  
+  seq2seq: 
+    src: en
+    tgt: fr
+    src_vocab: 5_000
+    tgt_vocab: 5_000

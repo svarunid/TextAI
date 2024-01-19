@@ -39,6 +39,7 @@ class TransformerConfig:
     max_len: int
     dropout: float
     deterministic: bool = False
+    decode: bool = False
     kernel_init: nn.initializers = nn.initializers.he_uniform()
     bias_init: nn.initializers = nn.initializers.ones
     pos_emb_init: Optional[Callable] = None
@@ -56,9 +57,7 @@ class TransformerConfig:
             max_len=config["max_len"],
             dropout=config["dropout"],
             deterministic=config["deterministic"],
-            kernel_init=config["kernel_init"],
-            bias_init=config["bias_init"],
-            pos_emb_init=config["pos_emb_init"],
+            decode=config["decode"]
         )
 
 class PosEmbedding(nn.Module):

@@ -2,6 +2,7 @@
 /checkpoint/
 /data/
 /wandb/
+/tokenizer/
 **/*.egg-info/
 **/__pycache__/
 **/*.*pkl

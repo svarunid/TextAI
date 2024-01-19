@@ -18,6 +18,7 @@ dependencies = [
     "orbax>=0.1.9",
     "clu @ git+https://github.com/google/CommonLoopUtils"
 ]
+license = { file = "LICENSE" }
 
 [tool.setuptools]
 package-dir = { "textai" = "textai" }
