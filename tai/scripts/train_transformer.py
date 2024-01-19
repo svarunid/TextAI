@@ -1,16 +1,18 @@
-import configparser
 import os
-import pickle
 
 import jax
 import optax
+import sentencepiece as spm
+import tensorflow as tf
+import tensorflow_text as text
 import wandb
+import yaml
 from etils import epath
 from jax import config as jax_config
 from jax import numpy as jnp
 from orbax import checkpoint as ocp
 
-import tai.models.transformer as transformer
+from tai.models.transformer import Transformer, TransformerConfig
 
 # TODO: Use common loop utils.
 # TODO: Use tf.data for the input pipeline.
@@ -18,59 +20,84 @@ import tai.models.transformer as transformer
 jax_config.update("jax_debug_nans", True)
 jax_config.update("jax_debug_infs", True)
 
-# Loading transformer config
-config_dir = (
-    epath.Path(os.path.dirname(os.path.realpath(__file__))).parent
-    / "config"
-    / "transformer.ini"
-)
-config = configparser.ConfigParser()
-config.read(config_dir)
+# Loading configuration
+root_dir = epath.Path(os.path.dirname(os.path.realpath(__file__))).parent.parent
+config_dir = root_dir / "config" / "transformer.yaml"
+with open(config_dir, "r") as f:
+    config = yaml.load(f, Loader=yaml.Loader)
 
-# Initialize data iterator
-dataloader = spickle.sload(config.get("training", "data_path"))
-dataloader = text.seq2seq_batched_iterator(
-    dataloader,
-    config.getint("model", "in_seq_len"),
-    config.getint("model", "out_seq_len"),
-    config.getint("model", "batch_size"),
-)
+model_config = config["model"]
+train_config = config["training"]
+tok_config = config["tokenizer"]
+wandb_config = config["wandb"]
+checkpoint_config = config["checkpoint"]
 
-# load validation data
-if use_validation := config.getboolean("validation", "use_validation"):
-    val_data = list(pickle.load(open(config.get("validation", "data_path"), "rb")))
-    val_data = text.seq2seq_batched_iterator(
-        val_data,
-        config.getint("model", "in_seq_len"),
-        config.getint("model", "out_seq_len"),
-        len(val_data),
+# Initialize tokenizer
+data_path = epath.Path(train_config["data_path"])
+if tok_config["use_separate_tokenizer"]:
+    src_tok = text.SentencepieceTokenizer(
+        spm.SentencePieceProcessor(
+            model_file=str(
+                root_dir.joinpath(
+                    data_path.parts[1:] / f"{tok_config['src_lang']}.model"
+                )
+            )
+        )
     )
-    Xdev, ydev, labeldev = next(val_data)
-    Xdev, ydev, labeldev = [jnp.array(x) for x in (Xdev, ydev, labeldev)]
-    Xdev_mask, ydev_mask = [text.create_pad_masks(x) for x in (Xdev, ydev)]
-    ydev_mask = ydev_mask[:, jnp.newaxis, :] + text.subsequent_mask(ydev_mask.shape[-1])
-    del val_data  # Delete validation data to free up memory
+    tgt_tok = text.SentencepieceTokenizer(
+        spm.SentencePieceProcessor(
+            model_file=str(
+                root_dir.joinpath(
+                    data_path.parts[1:] / f"{tok_config['tgt_lang']}.model"
+                )
+            )
+        ),
+        alpha=tok_config["alpha"],
+        add_bos=True,
+        add_eos=True,
+    )
+else:
+    tok = text.SentencepieceTokenizer(
+        spm.SentencePieceProcessor(
+            model_file=str(
+                root_dir.joinpath(data_path.parts[1:] / f"{tok_config['lang']}.model")
+            )
+        ),
+        alpha=tok_config["alpha"],
+        add_bos=True,
+        add_eos=True,
+    )
+
+# Initialize dataset
+src = data_path / train_config["src"]
+tgt = data_path / train_config["tgt"]
+src_ds = tf.data.TextLineDataset(src)
+tgt_ds = tf.data.TextLineDataset(tgt)
+if tok_config["use_separate_tokenizer"]:
+    src_ds = src_ds.map(src_tok.tokenize)
+    tgt_ds = tgt_ds.map(tgt_tok.tokenize)
+else:
+    src_ds = src_ds.map(tok.tokenize)
+    tgt_ds = tgt_ds.map(tok.tokenize)
+ds = tf.data.Dataset.zip((src_ds, tgt_ds)).map(
+    lambda x, y: (
+        tf.keras.utils.pad_sequences(x, padding="post"),
+        tf.keras.utils.pad_sequences(y, padding="post"),
+    )
+)
 
 # Initialize transformer model
-model, forward = transformer(
-    jax.random.PRNGKey(config.getint("model", "seed")),
-    config.getint("model", "in_vocab"),
-    config.getint("model", "out_vocab"),
-    config.getint("model", "in_seq_len"),
-    config.getint("model", "out_seq_len"),
-    config.getint("model", "d_model"),
-    config.getint("model", "num_heads"),
-    config.getint("model", "d_ff"),
-    config.getint("model", "enc_layers"),
-    config.getint("model", "dec_layers"),
-)
+key = jax.random.PRNGKey(config["seed"])
+model_config = TransformerConfig.fromDict(model_config)
+model = Transformer(model_config)
+model = model.init(key, *ds.take(1).as_numpy_iterator())
 
 
 # Defining loss function
 # Expects labels to be padded
 @jax.jit
 def loss(model, X, y, Xmask, ymask, labels):
-    yhat = forward(model, X, y, Xmask, ymask)
+    yhat = (model, X, y, Xmask, ymask)
     yhat = jax.nn.log_softmax(yhat, axis=-1)
     yhat = jnp.where(labels == 0, 0, jnp.take(yhat, labels, axis=-1))
     count = jnp.count_nonzero(yhat)

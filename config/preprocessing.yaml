@@ -1,3 +1,6 @@
+# This file only serves as a template when execute any scripts. 
+# You can change the values of the parameters as you want.
+
 input_type: text
 train_size: 0.7
 dev_size: 0.15

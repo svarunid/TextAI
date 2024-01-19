@@ -1,0 +1,45 @@
+# This file only serves as a template when execute any scripts. 
+# You can change the values of the parameters as you want.
+
+seed: 42
+
+model:
+  in_vocab: 5_000
+  out_vocab: 5_000
+  emb_dim: 256
+  num_heads: 8
+  num_layers: 3
+  mlp_dim: 1024
+  qkv_dim: 256
+  max_len: 64
+  dropout: 0.1
+  decode: True
+
+training:
+  epochs: 10
+  lr: 0.001
+  batch_size: 32
+  data_path: data/translation/europarl/en_fr
+  src: en
+  tgt: fr
+  use_validation: True
+
+tokenizer:
+  use_seperate_tokenizer: True
+  src_lang: en
+  tgt_lang: fr
+  lang: null
+  alpha: 0.1
+  
+wandb:
+  use_wandb: False
+  project: transformer_europarl_en_fr
+  notes: Initial run also will act as a baseline for future experiments
+  name: Initial run
+
+checkpoint:
+  use_checkpoint: True
+  overwrite: True
+  path: ./checkpoint/en_fr/transformer/
+  freq: 25
+  max_to_keep: 5
