@@ -44,3 +44,5 @@ pip install -e .[dev]
 
 ## Testing (Optional)
 It is highly recommended to write tests for your code. This ensures that the code is working as expected and also helps in debugging. While the main purpose of this repository is to serve as a learning resource, this code in this repository is used to train models for potentially real world applications. Hence, it is important to ensure that the code is working as expected.
+
+However you don't have to write tests for classes and functions that only use classes, functions and methods from imported libraries. For example, you don't have to write tests for the class `EncoderLayer` in tai/models/transformer.py as it only uses classes and methods from the `flax.nn` library.
