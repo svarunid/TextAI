@@ -66,17 +66,18 @@ if tok_config["use_separate_tokenizer"]:
     src_ds = src_ds.map(src_tok.tokenize, num_parallel_calls=AUTOTUNE)
     tgt_ds = tgt_ds.map(tgt_tok.tokenize, num_parallel_calls=AUTOTUNE)
 else:
-    src_ds = src_ds.map(tok.tokenize)
-    tgt_ds = tgt_ds.map(tok.tokenize)
-src_ds = src_ds.map(lambda x: x[: train_config["src_max_len"]])
+    src_ds = src_ds.map(tok.tokenize, num_parallel_calls=AUTOTUNE)
+    tgt_ds = tgt_ds.map(tok.tokenize, num_parallel_calls=AUTOTUNE)
+src_ds = src_ds.map(lambda x: x[: train_config["src_max_len"]], num_parallel_calls=AUTOTUNE)
 tgt_ds = tgt_ds.map(
-    lambda x: tf.concat([[2], x[: train_config["tgt_max_len"]], [3]], axis=-1)
+    lambda x: tf.concat([[2], x[: train_config["tgt_max_len"]], [3]], axis=-1),
+    num_parallel_calls=AUTOTUNE
 )
 
 ds = tf.data.Dataset.zip((src_ds, tgt_ds)).padded_batch(
     train_config["batch_size"],
     padded_shapes=(train_config["src_max_len"], train_config["tgt_max_len"]),
-)
+).prefetch(AUTOTUNE)
 
 # Initialize transformer model
 key = jax.random.PRNGKey(config["seed"])
