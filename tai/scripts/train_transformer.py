@@ -2,7 +2,6 @@ import os
 
 import jax
 import optax
-import sentencepiece as spm
 import tensorflow as tf
 import wandb
 import yaml
