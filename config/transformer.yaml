@@ -13,7 +13,8 @@ model:
   qkv_dim: 256
   max_len: 64
   dropout: 0.1
-  decode: True
+  deterministic: False
+  decode: False
 
 training:
   epochs: 10
@@ -21,11 +22,14 @@ training:
   batch_size: 32
   data_path: data/translation/europarl/en_fr
   src: en
+  src_max_len: 32
   tgt: fr
+  tgt_max_len: 32
   use_validation: True
 
 tokenizer:
-  use_seperate_tokenizer: True
+  path: tokenizer/translation/europarl/en_fr
+  use_separate_tokenizer: True
   src_lang: en
   tgt_lang: fr
   lang: null

@@ -219,7 +219,7 @@ class Transformer(nn.Module):
             input_mask = nn.make_attention_mask(jnp.ones_like(targets) > 0, inputs > 0)
             target_mask = None
         else:
-            input_mask = nn.make_attention_mask()
+            input_mask = nn.make_attention_mask(inputs > 0, inputs > 0)
             target_mask = nn.combine_masks(
                 nn.make_attention_mask(targets > 0, targets > 0),
                 nn.make_causal_mask(targets),
