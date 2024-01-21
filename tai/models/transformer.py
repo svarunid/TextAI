@@ -108,7 +108,6 @@ class MLP(nn.Module):
         x = nn.Dropout(rate=self.config.dropout)(
             x, deterministic=self.config.deterministic
         )
-        x = nn.LayerNorm()(x + inputs)
         return x
 
 
