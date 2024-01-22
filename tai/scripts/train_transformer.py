@@ -1,5 +1,6 @@
 import os
 
+import flax.linen as nn
 import jax
 import optax
 import tensorflow as tf
@@ -15,9 +16,10 @@ from tai.models.transformer import Transformer, TransformerConfig
 
 # TODO: Use common loop utils.
 
-# Configuring JAX
+# Configuring JAX & tensorflow
 jax_config.update("jax_debug_nans", True)
 jax_config.update("jax_debug_infs", True)
+# tf.config.experimental.set_visible_devices([], "GPU")
 
 # Constants
 AUTOTUNE = tf.data.AUTOTUNE
@@ -68,28 +70,36 @@ if tok_config["use_separate_tokenizer"]:
 else:
     src_ds = src_ds.map(tok.tokenize, num_parallel_calls=AUTOTUNE)
     tgt_ds = tgt_ds.map(tok.tokenize, num_parallel_calls=AUTOTUNE)
-src_ds = src_ds.map(lambda x: x[: train_config["src_max_len"]], num_parallel_calls=AUTOTUNE)
+src_ds = src_ds.map(
+    lambda x: x[: train_config["src_max_len"]], num_parallel_calls=AUTOTUNE
+)
 tgt_ds = tgt_ds.map(
     lambda x: tf.concat([[2], x[: train_config["tgt_max_len"]], [3]], axis=-1),
-    num_parallel_calls=AUTOTUNE
+    num_parallel_calls=AUTOTUNE,
 )
 
-ds = tf.data.Dataset.zip((src_ds, tgt_ds)).padded_batch(
-    train_config["batch_size"],
-    padded_shapes=(train_config["src_max_len"], train_config["tgt_max_len"]),
-).prefetch(AUTOTUNE)
+ds = (
+    tf.data.Dataset.zip((src_ds, tgt_ds))
+    .padded_batch(
+        train_config["batch_size"],
+        padded_shapes=(train_config["src_max_len"], train_config["tgt_max_len"]),
+    )
+    .prefetch(AUTOTUNE)
+)
 
 # Initialize transformer model
-with jax.default_device(jax.devices("cpu")[0]):
-    key, dropout_key = jax.random.split(jax.random.PRNGKey(config["seed"]))
-    model_config = TransformerConfig.fromDict(model_config)
-    model = Transformer(model_config)
-    model = model.init(
-        key,
-        jnp.ones((train_config["src_max_len"]), dtype=jnp.int32),
-        jnp.ones((train_config["tgt_max_len"]), dtype=jnp.int32),
-    )
-
+# with jax.default_device(jax.devices("cpu")[0]):
+param_key, dropout_key = jax.random.split(jax.random.PRNGKey(config["seed"]))
+model_config = TransformerConfig.fromDict(model_config)
+model = Transformer(model_config)
+params = model.init(
+    {
+        "params": param_key,
+        "dropout": dropout_key,
+    },
+    jnp.ones((train_config["src_max_len"]), dtype=jnp.int32),
+    jnp.ones((train_config["tgt_max_len"]), dtype=jnp.int32),
+)
 
 # # Defining loss function
 # # Expects labels to be padded

@@ -14,14 +14,14 @@ def sinusoidal_init(
     def init(key, shape, dtype=np.float32):
         del key, dtype
         dim = shape[-1]
-        position = np.arange(0, max_len)[:, jnp.newaxis]
+        position = jnp.arange(0, max_len)[:, jnp.newaxis]
         scale_factor = (max_scale / min_scale) ** (2 * jnp.arange(0, dim, 2) / dim)
-        div_term = np.divide(1, scale_factor)
-        pe = np.empty((max_len, dim), dtype=np.float32)
-        pe[:, 0::2] = np.sin(position * div_term)
-        pe[:, 1::2] = np.cos(position * div_term)
+        div_term = jnp.divide(1, scale_factor)
+        pe = jnp.empty((max_len, dim), dtype=np.float32)
+        pe.at[:, 0::2].set(jnp.sin(position * div_term))
+        pe.at[:, 1::2].set(jnp.cos(position * div_term))
         pe = pe[np.newaxis, :, :]
-        return jnp.array(pe)
+        return pe
 
     return init
 
@@ -163,7 +163,7 @@ class DecoderLayer(nn.Module):
             broadcast_dropout=False,
             dropout_rate=self.config.dropout,
             deterministic=self.config.deterministic,
-        )(y, enc_out, enc_out, mask=enc_mask)
+        )(x, enc_out, enc_out, mask=enc_mask)
         y = nn.Dropout(rate=self.config.dropout)(
             y, deterministic=self.config.deterministic
         )
