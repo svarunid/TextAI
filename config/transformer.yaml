@@ -22,9 +22,9 @@ training:
   batch_size: 32
   data_path: data/translation/europarl/en_fr
   src: en
-  src_max_len: 32
+  src_max_len: 64
   tgt: fr
-  tgt_max_len: 32
+  tgt_max_len: 64
   use_validation: True
 
 tokenizer:

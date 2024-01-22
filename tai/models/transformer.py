@@ -124,7 +124,7 @@ class EncoderLayer(nn.Module):
             broadcast_dropout=False,
             dropout_rate=self.config.dropout,
             deterministic=self.config.deterministic,
-        )(inputs, inputs, inputs, mask)
+        )(inputs, inputs, inputs, mask=mask)
         x = nn.Dropout(rate=self.config.dropout)(
             x, deterministic=self.config.deterministic
         )
@@ -149,7 +149,7 @@ class DecoderLayer(nn.Module):
             dropout_rate=self.config.dropout,
             deterministic=self.config.deterministic,
             decode=self.config.decode,
-        )(inputs, inputs, inputs, input_mask)
+        )(inputs, inputs, inputs, mask=input_mask)
         x = nn.Dropout(rate=self.config.dropout)(
             x, deterministic=self.config.deterministic
         )
@@ -163,7 +163,7 @@ class DecoderLayer(nn.Module):
             broadcast_dropout=False,
             dropout_rate=self.config.dropout,
             deterministic=self.config.deterministic,
-        )(y, enc_out, enc_out, enc_mask)
+        )(y, enc_out, enc_out, mask=enc_mask)
         y = nn.Dropout(rate=self.config.dropout)(
             y, deterministic=self.config.deterministic
         )

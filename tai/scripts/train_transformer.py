@@ -80,14 +80,15 @@ ds = tf.data.Dataset.zip((src_ds, tgt_ds)).padded_batch(
 ).prefetch(AUTOTUNE)
 
 # Initialize transformer model
-key = jax.random.PRNGKey(config["seed"])
-model_config = TransformerConfig.fromDict(model_config)
-model = Transformer(model_config)
-model = model.init(
-    key,
-    jnp.ones((train_config["src_max_len"]), dtype=jnp.int32),
-    jnp.ones((train_config["tgt_max_len"]), dtype=jnp.int32),
-)
+with jax.default_device(jax.devices("cpu")[0]):
+    key, dropout_key = jax.random.split(jax.random.PRNGKey(config["seed"]))
+    model_config = TransformerConfig.fromDict(model_config)
+    model = Transformer(model_config)
+    model = model.init(
+        key,
+        jnp.ones((train_config["src_max_len"]), dtype=jnp.int32),
+        jnp.ones((train_config["tgt_max_len"]), dtype=jnp.int32),
+    )
 
 
 # # Defining loss function
