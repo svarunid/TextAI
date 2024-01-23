@@ -31,5 +31,6 @@ def smooth_labels(labels, num_labels, smoothing=0.1):
     labels = tf.one_hot(labels, depth=num_labels)
     return tf.where(
         labels[..., 0] == 1,
-        tf.zeros(num_labels)(1 - smoothing) * tf.ones_like(labels) / (num_labels - 1),
+        tf.zeros(num_labels),
+        (1 - smoothing) * labels / (num_labels - 1),
     )
