@@ -125,9 +125,6 @@ class EncoderLayer(nn.Module):
             dropout_rate=self.config.dropout,
             deterministic=self.config.deterministic,
         )(inputs, inputs, inputs, mask=mask)
-        x = nn.Dropout(rate=self.config.dropout)(
-            x, deterministic=self.config.deterministic
-        )
         x = nn.LayerNorm()(x + inputs)
 
         y = MLP(self.config)(x)
@@ -150,9 +147,6 @@ class DecoderLayer(nn.Module):
             deterministic=self.config.deterministic,
             decode=self.config.decode,
         )(inputs, inputs, inputs, mask=input_mask)
-        x = nn.Dropout(rate=self.config.dropout)(
-            x, deterministic=self.config.deterministic
-        )
         x = nn.LayerNorm()(x + inputs)
 
         y = nn.MultiHeadDotProductAttention(
@@ -164,9 +158,6 @@ class DecoderLayer(nn.Module):
             dropout_rate=self.config.dropout,
             deterministic=self.config.deterministic,
         )(x, enc_out, enc_out, mask=enc_mask)
-        y = nn.Dropout(rate=self.config.dropout)(
-            y, deterministic=self.config.deterministic
-        )
         y = nn.LayerNorm()(y + x)
 
         z = MLP(self.config)(y)

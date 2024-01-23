@@ -7,6 +7,7 @@ import tensorflow as tf
 import wandb
 import yaml
 from etils import epath
+from flax.training.train_state import TrainState
 from jax import config as jax_config
 from jax import numpy as jnp
 from orbax import checkpoint as ocp
@@ -20,6 +21,8 @@ from tai.models.transformer import Transformer, TransformerConfig
 jax_config.update("jax_debug_nans", True)
 jax_config.update("jax_debug_infs", True)
 # tf.config.experimental.set_visible_devices([], "GPU")
+
+# jax.profiler.start_trace("/tmp/tensorboard")
 
 # Constants
 AUTOTUNE = tf.data.AUTOTUNE
@@ -74,21 +77,23 @@ src_ds = src_ds.map(
     lambda x: x[: train_config["src_max_len"]], num_parallel_calls=AUTOTUNE
 )
 tgt_ds = tgt_ds.map(
-    lambda x: tf.concat([[2], x[: train_config["tgt_max_len"]], [3]], axis=-1),
+    lambda x: tf.concat([[2], x[: train_config["tgt_max_len"]]], axis=-1),
     num_parallel_calls=AUTOTUNE,
 )
+labels_ds = tgt_ds.map(lambda x: tf.concat([x[1:], [3]], axis=-1), num_parallel_calls=AUTOTUNE)
 
 ds = (
-    tf.data.Dataset.zip((src_ds, tgt_ds))
+    tf.data.Dataset.zip((src_ds, tgt_ds, labels_ds))
+    .cache()
     .padded_batch(
         train_config["batch_size"],
         padded_shapes=(train_config["src_max_len"], train_config["tgt_max_len"]),
     )
+    .repeat(train_config["epochs"])
     .prefetch(AUTOTUNE)
 )
 
 # Initialize transformer model
-# with jax.default_device(jax.devices("cpu")[0]):
 param_key, dropout_key = jax.random.split(jax.random.PRNGKey(config["seed"]))
 model_config = TransformerConfig.fromDict(model_config)
 model = Transformer(model_config)
@@ -100,6 +105,9 @@ params = model.init(
     jnp.ones((train_config["src_max_len"]), dtype=jnp.int32),
     jnp.ones((train_config["tgt_max_len"]), dtype=jnp.int32),
 )
+# jax.tree_util.tree_map(lambda x: x.block_until_ready(), params)
+# jax.profiler.stop_trace()
+
 
 # # Defining loss function
 # # Expects labels to be padded
