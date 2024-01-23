@@ -35,7 +35,6 @@ checkpoint_config = config["checkpoint"]
 
 # Initialize dataset
 tok_config["path"] = root_dir / tok_config["path"]
-train_config["vocab_size"] = model_config["out_vocab_size"]
 src = root_dir / train_config["data_path"] / train_config["src"]
 tgt = root_dir / train_config["data_path"] / train_config["tgt"]
 ds = create_dataset(train_config, tok_config, src, tgt)

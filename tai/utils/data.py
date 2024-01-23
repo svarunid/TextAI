@@ -56,7 +56,7 @@ def create_dataset(config, tok_config, src, tgt, one_hot=True):
         .padded_batch(
             config["batch_size"],
             padded_shapes=(
-                config["src_max_len"], 
+                config["src_max_len"],
                 config["tgt_max_len"],
                 config["tgt_max_len"],
             ),
