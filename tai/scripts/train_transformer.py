@@ -7,13 +7,12 @@ import tensorflow as tf
 import wandb
 import yaml
 from etils import epath
-from flax.training.train_state import TrainState
 from jax import config as jax_config
 from jax import numpy as jnp
 from orbax import checkpoint as ocp
-from tensorflow_text import SentencepieceTokenizer
 
 from tai.models.transformer import Transformer, TransformerConfig
+from tai.utils.data import create_dataset
 
 # TODO: Use common loop utils.
 
@@ -21,11 +20,6 @@ from tai.models.transformer import Transformer, TransformerConfig
 jax_config.update("jax_debug_nans", True)
 jax_config.update("jax_debug_infs", True)
 # tf.config.experimental.set_visible_devices([], "GPU")
-
-# jax.profiler.start_trace("/tmp/tensorboard")
-
-# Constants
-AUTOTUNE = tf.data.AUTOTUNE
 
 # Loading configuration
 root_dir = epath.Path(os.path.dirname(os.path.realpath(__file__))).parent.parent
@@ -39,59 +33,13 @@ tok_config = config["tokenizer"]
 wandb_config = config["wandb"]
 checkpoint_config = config["checkpoint"]
 
-# Initialize tokenizer
-tok_path = root_dir / tok_config["path"]
-if tok_config["use_separate_tokenizer"]:
-    with open(
-        tok_path / f"{tok_config['src_lang']}.model",
-        "rb",
-    ) as f:
-        src_tok = SentencepieceTokenizer(f.read())
-    with open(
-        tok_path / f"{tok_config['tgt_lang']}.model",
-        "rb",
-    ) as f:
-        tgt_tok = SentencepieceTokenizer(
-            f.read(),
-            alpha=tok_config["alpha"],
-        )
-else:
-    with open(tok_path / f"{tok_config['lang']}.model", "rb") as f:
-        tok = SentencepieceTokenizer(
-            f.read(),
-            alpha=tok_config["alpha"],
-        )
-
 # Initialize dataset
+tok_config["path"] = root_dir / tok_config["path"]
+train_config["vocab_size"] = model_config["out_vocab_size"]
 src = root_dir / train_config["data_path"] / train_config["src"]
 tgt = root_dir / train_config["data_path"] / train_config["tgt"]
-src_ds = tf.data.TextLineDataset(src)
-tgt_ds = tf.data.TextLineDataset(tgt)
-if tok_config["use_separate_tokenizer"]:
-    src_ds = src_ds.map(src_tok.tokenize, num_parallel_calls=AUTOTUNE)
-    tgt_ds = tgt_ds.map(tgt_tok.tokenize, num_parallel_calls=AUTOTUNE)
-else:
-    src_ds = src_ds.map(tok.tokenize, num_parallel_calls=AUTOTUNE)
-    tgt_ds = tgt_ds.map(tok.tokenize, num_parallel_calls=AUTOTUNE)
-src_ds = src_ds.map(
-    lambda x: x[: train_config["src_max_len"]], num_parallel_calls=AUTOTUNE
-)
-tgt_ds = tgt_ds.map(
-    lambda x: tf.concat([[2], x[: train_config["tgt_max_len"]]], axis=-1),
-    num_parallel_calls=AUTOTUNE,
-)
-labels_ds = tgt_ds.map(lambda x: tf.concat([x[1:], [3]], axis=-1), num_parallel_calls=AUTOTUNE)
+ds = create_dataset(train_config, tok_config, src, tgt)
 
-ds = (
-    tf.data.Dataset.zip((src_ds, tgt_ds, labels_ds))
-    .cache()
-    .padded_batch(
-        train_config["batch_size"],
-        padded_shapes=(train_config["src_max_len"], train_config["tgt_max_len"]),
-    )
-    .repeat(train_config["epochs"])
-    .prefetch(AUTOTUNE)
-)
 
 # Initialize transformer model
 param_key, dropout_key = jax.random.split(jax.random.PRNGKey(config["seed"]))
@@ -105,20 +53,6 @@ params = model.init(
     jnp.ones((train_config["src_max_len"]), dtype=jnp.int32),
     jnp.ones((train_config["tgt_max_len"]), dtype=jnp.int32),
 )
-# jax.tree_util.tree_map(lambda x: x.block_until_ready(), params)
-# jax.profiler.stop_trace()
-
-
-# # Defining loss function
-# # Expects labels to be padded
-# @jax.jit
-# def loss(model, X, y, Xmask, ymask, labels):
-#     yhat = (model, X, y, Xmask, ymask)
-#     yhat = jax.nn.log_softmax(yhat, axis=-1)
-#     yhat = jnp.where(labels == 0, 0, jnp.take(yhat, labels, axis=-1))
-#     count = jnp.count_nonzero(yhat)
-#     return -jnp.sum(yhat) / count
-
 
 # # Defining optimiser
 # # A linear warmup is used for the first 200 steps upto a peak learning rate of 0.1
