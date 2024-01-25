@@ -3,7 +3,6 @@ import os
 import flax.linen as nn
 import jax
 import optax
-import tensorflow as tf
 import wandb
 import yaml
 from clu.data import TfDatasetIterator
@@ -13,9 +12,8 @@ from jax import numpy as jnp
 from orbax import checkpoint as ocp
 
 from tai.models.transformer import Transformer, TransformerConfig
-from tai.utils.data import create_dataset
 from tai.utils import metrics
-
+from tai.utils.data import create_dataset
 
 # Configuring JAX & tensorflow
 jax_config.update("jax_debug_nans", True)
@@ -44,7 +42,7 @@ src = root_dir / train_config["path"] / train_config["src"]
 tgt = root_dir / train_config["path"] / train_config["tgt"]
 dataloader = TfDatasetIterator(
     create_dataset(train_config, tok_config, src, tgt),
-    checkpoint=checkpoint_config["use_checkpoint"]
+    checkpoint=checkpoint_config["use_checkpoint"],
 )
 del src, tgt
 
@@ -62,11 +60,11 @@ params = model.init(
 
 # Defining optimiser
 lr = optax.warmup_cosine_decay_schedule(
-    optimizer_config["lr"], 
-    optimizer_config["peak_lr"], 
-    optimizer_config["warmup_steps"], 
-    optimizer_config["decay_steps"], 
-    optimizer_config["final_lr"]
+    optimizer_config["lr"],
+    optimizer_config["peak_lr"],
+    optimizer_config["warmup_steps"],
+    optimizer_config["decay_steps"],
+    optimizer_config["final_lr"],
 )
 optimizer = optax.inject_hyperparams(optax.adam)(learning_rate=lr)
 del lr
@@ -80,15 +78,19 @@ state = metrics.TrainState.create(
 )
 del params, optimizer
 
+
 # Define a train step function
 @jax.jit
 def train_step(state, inputs, targets, labels):
-    loss_and_grad = jax.value_and_grad(jax.vmap(metrics.cross_entropy_with_integer_labels))
+    loss_and_grad = jax.value_and_grad(
+        jax.vmap(metrics.cross_entropy_with_integer_labels)
+    )
     preds = state.apply_fn({"params": state.params}, inputs, targets)
     loss, grads = loss_and_grad(preds=preds, labels=labels)
     loss = jnp.mean(loss)
     grads = jax.tree_util.tree_map(lambda x: jnp.mean(x, axis=0), grads)
     return state.apply_gradients(grads=grads), loss
+
 
 @jax.jit
 def compute_metrics(state, inputs, targets, labels):
@@ -98,9 +100,9 @@ def compute_metrics(state, inputs, targets, labels):
     non_zero_count = jnp.count_nonzero(labels)
     preds, labels = nn.softmax(preds[:non_zero_count]), labels[:non_zero_count]
     metrics_updates = state.metrics.single_from_model_output(
-        logits = preds,
-        labels = labels,
-        loss = loss,
+        logits=preds,
+        labels=labels,
+        loss=loss,
     )
     metrics = state.metrics.merge(metrics_updates)
     return state.replace(metrics=metrics)
@@ -130,8 +132,9 @@ if use_checkpoint := checkpoint_config["use_checkpoint"]:
         mngr.wait_until_finished()
         restored_items = mngr.restore(mngr.latest_step())
         state = restored_items["state"]
-    
-    dataloader = dataloader.restore(dataset_checkpoint_path)
+
+    if dataset_checkpoint_path.exists():
+        dataloader = dataloader.restore(dataset_checkpoint_path)
 
 # Optional configuration for logging to wandb
 if use_wandb := wandb_config["use_wandb"]:
@@ -162,7 +165,7 @@ for i, (inputs, targets, labels) in enumerate(dataloader):
 
     # Checkpoint model and optimiser state
     if use_checkpoint:
-        mngr.save(i, items={"state":state})
+        mngr.save(i, items={"state": state})
         dataloader.save(dataset_checkpoint_path)
 
     # Log to wandb
