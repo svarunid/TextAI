@@ -17,15 +17,17 @@ model:
   decode: False
 
 training:
+  task: translation
+  dataset: europarl
+  lang_pair: en_fr
   epochs: 10
-  lr: 0.001
   batch_size: 32
-  data_path: data/translation/europarl/en_fr
+  path: data/translation/europarl/en_fr
   src: en
   src_max_len: 64
   tgt: fr
   tgt_max_len: 64
-  use_validation: True
+  cache_dir: cache/translation/europarl/en_fr
 
 tokenizer:
   path: tokenizer/translation/europarl/en_fr
@@ -34,16 +36,28 @@ tokenizer:
   tgt_lang: fr
   lang: null
   alpha: 0.1
+
+optimizer:
+  lr: 0.001
+  warmup_steps: 4000
+  peak_lr: 0.001
+  decay_steps: 8000
+  final_lr: 0.0001
   
 wandb:
   use_wandb: False
   project: transformer_europarl_en_fr
-  notes: Initial run also will act as a baseline for future experiments
+  notes: Baseline transformer model
   name: Initial run
+  run_config:
+    task: translation
+    dataset: europarl
+    lang_pair: en_fr
+
 
 checkpoint:
   use_checkpoint: True
   overwrite: True
-  path: ./checkpoint/en_fr/transformer/
+  path: checkpoint/translation/europarl/en_fr/transformer
   freq: 25
   max_to_keep: 5

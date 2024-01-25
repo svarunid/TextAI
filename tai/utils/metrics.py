@@ -1,3 +1,4 @@
+import jax
 import optax
 from clu import metrics
 from flax import struct
@@ -32,3 +33,4 @@ def cross_entropy_with_integer_labels(preds, labels):
     non_zero_count = jnp.count_nonzero(labels)
     preds, labels = preds[:non_zero_count], labels[:non_zero_count]
     return optax.softmax_cross_entropy_with_integer_labels(preds, labels).mean()
+

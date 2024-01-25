@@ -1,58 +1,42 @@
 import tensorflow as tf
+from functools import partial
 from tensorflow_text import SentencepieceTokenizer
 
 AUTOTUNE = tf.data.AUTOTUNE
 
 
-def create_tokenizer(config, path):
+def create_tokenizer(config):
+    def load_tokenizer(lang, alpha=None):
+        with open(config["path"] / lang, "rb") as f:
+            return SentencepieceTokenizer(f.read(), alpha=alpha)
+
     if config["use_separate_tokenizer"]:
-        with open(
-            path / f"{config['src_lang']}.model",
-            "rb",
-        ) as f:
-            src_tok = SentencepieceTokenizer(f.read())
-        with open(
-            path / f"{config['tgt_lang']}.model",
-            "rb",
-        ) as f:
-            tgt_tok = SentencepieceTokenizer(
-                f.read(),
-                alpha=config["alpha"],
-            )
+        src_tok = load_tokenizer(config["src_lang"])
+        tgt_tok = load_tokenizer(config["tgt_lang"], alpha=config["alpha"])
         return src_tok, tgt_tok
-    with open(path / f"{config['lang']}.model", "rb") as f:
-        tok = SentencepieceTokenizer(
-            f.read(),
-            alpha=config["alpha"],
-        )
-    return tok
+
+    tok = load_tokenizer(config["lang"], alpha=config["alpha"])
+    return tok, tok
 
 
-def create_dataset(config, tok_config, src, tgt, one_hot=True):
+def create_dataset(config, tok_config, src, tgt):
+    map_with_autotune = lambda ds: partial(ds.map, num_parallel_calls=AUTOTUNE)
     src_ds = tf.data.TextLineDataset(src)
     tgt_ds = tf.data.TextLineDataset(tgt)
-    if tok_config["use_separate_tokenizer"]:
-        src_tok, tgt_tok = create_tokenizer(tok_config, tok_config["path"])
-        src_ds = src_ds.map(src_tok.tokenize, num_parallel_calls=AUTOTUNE)
-        tgt_ds = tgt_ds.map(tgt_tok.tokenize, num_parallel_calls=AUTOTUNE)
-    else:
-        tok = create_tokenizer(tok_config, tok_config["path"])
-        src_ds = src_ds.map(tok.tokenize, num_parallel_calls=AUTOTUNE)
-        tgt_ds = tgt_ds.map(tok.tokenize, num_parallel_calls=AUTOTUNE)
-    src_ds = src_ds.map(
-        lambda x: x[: config["src_max_len"]], num_parallel_calls=AUTOTUNE
+    src_tok, tgt_tok = create_tokenizer(tok_config, tok_config["path"])
+    src_ds = map_with_autotune(src_ds)(src_tok.tokenize)
+    tgt_ds = map_with_autotune(tgt_ds)(tgt_tok.tokenize)
+    src_ds = map_with_autotune(src_ds)(lambda x: x[: config["src_max_len"]])
+    tgt_ds = map_with_autotune(tgt_ds)(
+        lambda x: tf.concat([[2], x[: config["tgt_max_len"]]], axis=-1)
     )
-    tgt_ds = tgt_ds.map(
-        lambda x: tf.concat([[2], x[: config["tgt_max_len"]]], axis=-1),
-        num_parallel_calls=AUTOTUNE,
-    )
-    labels_ds = tgt_ds.map(
-        lambda x: tf.concat([x[1:], [3]], axis=-1), num_parallel_calls=AUTOTUNE
+    labels_ds = map_with_autotune(tgt_ds)(
+        lambda x: tf.concat([x[1:], [3]], axis=-1),
     )
 
     ds = (
         tf.data.Dataset.zip((src_ds, tgt_ds, labels_ds))
-        .cache()
+        .cache(config["cache_dir"])
         .padded_batch(
             config["batch_size"],
             padded_shapes=(
@@ -62,6 +46,5 @@ def create_dataset(config, tok_config, src, tgt, one_hot=True):
             ),
         )
         .repeat(config["epochs"])
-        .prefetch(AUTOTUNE)
     )
     return ds
