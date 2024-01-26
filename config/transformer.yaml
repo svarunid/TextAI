@@ -56,7 +56,7 @@ wandb:
 
 
 checkpoint:
-  use_checkpoint: True
+  use_checkpoint: False
   overwrite: True
   path: checkpoint/translation/europarl/en_fr/transformer
   freq: 25
