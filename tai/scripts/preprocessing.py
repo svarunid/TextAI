@@ -19,7 +19,7 @@ if input_type == "text":
     task = data_config["task"]
     task_config = data_config[task]
 
-    train_transformer = partial(
+    train_tokenizer = partial(
         spm.SentencePieceTrainer.train,
         model_type=data_config["model"],
         normalization_rule_name=data_config["norm_rule"],
@@ -38,11 +38,13 @@ if input_type == "text":
         makedirs(tok_path, exist_ok=True)
 
     if task == "seq2seq":
-        train_transformer(
+        train_tokenizer(
             input=str((root_dir / data_path / task_config["src"])),
             model_prefix=str((root_dir / tok_path / task_config["src"].split(".")[0])),
+            vocab_size=task_config["src_vocab"],
         )
-        train_transformer(
+        train_tokenizer(
             input=str((root_dir / data_path / task_config["tgt"])),
             model_prefix=str((root_dir / tok_path / task_config["tgt"].split(".")[0])),
+            vocab_size=task_config["tgt_vocab"],
         )
