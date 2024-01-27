@@ -1,4 +1,6 @@
 # Text AI: Deep Neural Network Architectures for Text Based Tasks
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 
 A repository hosting deep neural network architectures trained for text based tasks. These include seq2seq, classification, seq2vec, etc. The main purpose of this repository is to serve as a practitioner's guide to building an end-to-end industry grade deep learning model training pipeline.
 
