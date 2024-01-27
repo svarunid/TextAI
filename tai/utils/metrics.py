@@ -1,8 +1,8 @@
 import flax.linen as nn
-import optax
 from clu import metrics
 from flax import struct
 from flax.training.train_state import TrainState
+from jax import lax
 from jax import numpy as jnp
 
 
@@ -17,22 +17,22 @@ class TrainState(TrainState):
 
 
 def cross_entropy_with_label_smoothing(preds, labels, smoothing=0.1):
-    """
-    NOTE: This function is not jit-able.
-    """
     confidence = 1.0 - smoothing
-    non_zero_count = jnp.count_nonzero(labels)
-    preds, labels = preds[:non_zero_count], labels[:non_zero_count]
-    true_dist = jnp.full_like(preds, smoothing / (preds.shape[-1] - 2))
-    true_dist = true_dist.at[:, labels].set(confidence)
-    true_dist.at[:, :2].set(0.0)
-    return optax.softmax_cross_entropy(preds, true_dist).mean()
+    count = jnp.count_nonzero(labels)
+    preds = nn.log_softmax(preds)
+    n_class = preds.shape[-1]
+    smooth_labels = jnp.where(
+        nn.one_hot(labels, n_class) == 0, smoothing / (n_class - 1), confidence
+    )
+    smooth_labels.at[..., 0].set(0.0)
+    prod = lax.dynamic_slice(smooth_labels * preds, (0, 0), (count, n_class))
+    return -jnp.sum(prod) / count
 
 
 def cross_entropy_with_integer_labels(preds, labels):
     preds = nn.log_softmax(preds)
     preds = jnp.where(labels == 0, 0, jnp.take(preds, labels, axis=-1))
-    count = jnp.count_nonzero(preds)
+    count = jnp.count_nonzero(labels)
     return -jnp.sum(preds) / count
 
 

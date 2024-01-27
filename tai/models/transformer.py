@@ -223,3 +223,23 @@ class Transformer(nn.Module):
             bias_init=self.config.bias_init,
         )(dec)
         return logits
+
+
+def create_model(config: TransformerConfig, rngs):
+    """
+    Creates a Transformer model from the given configuration.
+
+    Args:
+        config (dict): Configuration dictionary.
+        key (jax.random.PRNGKey): Random key.
+
+    Returns:
+        tuple: Tuple of model and parameters.
+    """
+    model = Transformer(config)
+    params = model.init(
+        rngs,
+        jnp.ones((config.max_len,), dtype=jnp.int32),
+        jnp.ones((config.max_len,), dtype=jnp.int32),
+    )
+    return model, params

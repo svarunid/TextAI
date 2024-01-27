@@ -11,6 +11,16 @@ AUTOTUNE = tf.data.AUTOTUNE
 
 
 def create_tokenizer(config):
+    """
+    Creates a tokenizer from the given configuration.
+
+    Args:
+        config (dict): Configuration dictionary.
+
+    Returns:
+        tuple: Tuple of source and target language tokenizers.
+    """
+
     def load_tokenizer(lang, alpha=1):
         with open(config["path"] / (lang + ".model"), "rb") as f:
             return SentencepieceTokenizer(f.read(), alpha=alpha)
@@ -24,14 +34,35 @@ def create_tokenizer(config):
     return tok, tok
 
 
-def create_dataset(config, tok_config, src, tgt):
+def create_dataset(root_dir, config, tok_config):
+    """
+    Creates a tf.data.Dataset from the given configuration. Automatically
+    pads, repeats, caches and prefetches the dataset.
+
+    Args:
+        root_dir (Path): Path to the root directory.
+        config (dict): Configuration dictionary.
+        tok_config (dict): Tokenizer configuration dictionary.
+
+    Returns:
+        tf.data.Dataset: Dataset.
+    """
+    tok_config["path"] = root_dir / tok_config["path"]
+
+    cache_dir = root_dir / config["cache_dir"]
+    if not cache_dir.exists():
+        cache_dir.mkdir(parents=True, exist_ok=True)
+
+    src = root_dir / config["path"] / config["src"]
+    tgt = root_dir / config["path"] / config["tgt"]
+
     map_with_autotune = lambda ds: partial(ds.map, num_parallel_calls=AUTOTUNE)
-    to_dlpack = tf.experimental.dlpack.to_dlpack
-    src_ds = tf.data.TextLineDataset(src)
-    tgt_ds = tf.data.TextLineDataset(tgt)
-    src_tok, tgt_tok = create_tokenizer(tok_config)
-    src_ds = map_with_autotune(src_ds)(src_tok.tokenize)
-    tgt_ds = map_with_autotune(tgt_ds)(tgt_tok.tokenize)
+    src_ds, tgt_ds = [tf.data.TextLineDataset(lang) for lang in (src, tgt)]
+    src_ds, tgt_ds = [
+        map_with_autotune(ds)(tok.tokenize)
+        for ds, tok in zip((src_ds, tgt_ds), create_tokenizer(tok_config))
+    ]
+
     src_ds = map_with_autotune(src_ds)(lambda x: x[: config["src_max_len"]])
     tgt_ds = map_with_autotune(tgt_ds)(
         lambda x: tf.concat([[2], x[: config["tgt_max_len"] - 1]], axis=-1)
@@ -50,15 +81,28 @@ def create_dataset(config, tok_config, src, tgt):
                 config["tgt_max_len"],
             ),
         )
-        .cache(filename=str(config["cache_dir"]))
+        .cache(filename=os.fspath(cache_dir))
         .repeat(config["epochs"])
+        .prefetch(AUTOTUNE)
     )
 
     return ds
 
 
 class TfDatasetIterator(data.DatasetIterator):
+    """
+    A wrapper around tf.data.Dataset that implements the clu.data.DatasetIterator
+    interface.
+    """
+
     def __init__(self, dataset, checkpoint_dir) -> None:
+        """
+        Initializes the iterator.
+
+        Args:
+            dataset (tf.data.Dataset): Dataset to wrap.
+            checkpoint_dir (Path): Path to the checkpoint directory.
+        """
         super().__init__()
         self._dataset = dataset
         self.checkpoint_dir = Path(checkpoint_dir)
@@ -80,11 +124,26 @@ class TfDatasetIterator(data.DatasetIterator):
         return tuple(to_array(to_dlpack(el)) for el in next(self.iterator))
 
     def reset(self):
+        """
+        Resets the iterator.
+        """
         self.iterator = iter(self._dataset)
         self._checkpointer = tf.train.Checkpoint(ds=self.iterator)
 
     def save(self, filename: Path):
+        """
+        Saves the iterator state to disk.
+
+        Args:
+            filename (Path): Path to save the iterator state to.
+        """
         self._checkpointer.write(file_prefix=os.fspath(self.checkpoint_dir / filename))
 
     def restore(self, filename: Path):
+        """
+        Restores the iterator state from disk.
+
+        Args:
+            filename (Path): Path to restore the iterator state from.
+        """
         self._checkpointer.read(os.fspath(self.checkpoint_dir / filename))

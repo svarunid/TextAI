@@ -1,8 +1,6 @@
 import os
 
-import flax.linen as nn
 import jax
-import optax
 import wandb
 import yaml
 from etils import epath
@@ -10,9 +8,8 @@ from jax import config as jax_config
 from jax import numpy as jnp
 from orbax import checkpoint as ocp
 
-from tai.models.transformer import Transformer, TransformerConfig
-from tai.utils import metrics
-from tai.utils.data import TfDatasetIterator, create_dataset
+from tai.models.transformer import TransformerConfig, create_model
+from tai.utils import checkpoint, data, metrics, wandb
 
 # Configuring JAX & tensorflow
 jax_config.update("jax_debug_nans", True)
@@ -38,42 +35,15 @@ del config
 
 
 # Initialize dataset
-tok_config["path"] = root_dir / tok_config["path"]
-train_config["cache_dir"] = root_dir / train_config["cache_dir"]
-if not train_config["cache_dir"].exists():
-    train_config["cache_dir"].mkdir(parents=True, exist_ok=True)
-src = root_dir / train_config["path"] / train_config["src"]
-tgt = root_dir / train_config["path"] / train_config["tgt"]
-dataloader = TfDatasetIterator(
-    create_dataset(train_config, tok_config, src, tgt),
-    checkpoint_dir=checkpoint_config["path"],
+dataset = data.create_dataset(root_dir, train_config, tok_config)
+
+# Initialize transformer model and optimizer
+params_key, dropout_key = jax.random.split(jax.random.PRNGKey(seed))
+model, params = create_model(
+    TransformerConfig.fromDict(model_config),
+    {"params": params_key, "dropout": dropout_key},
 )
-del src, tgt
-
-
-# Initialize transformer model
-param_key, dropout_key = jax.random.split(jax.random.PRNGKey(seed))
-model = Transformer(TransformerConfig.fromDict(model_config))
-params = model.init(
-    {
-        "params": param_key,
-        "dropout": dropout_key,
-    },
-    jnp.ones((train_config["src_max_len"],), dtype=jnp.int32),
-    jnp.ones((train_config["tgt_max_len"],), dtype=jnp.int32),
-)
-
-
-# Defining optimiser
-lr = optax.warmup_cosine_decay_schedule(
-    optimizer_config["lr"],
-    optimizer_config["peak_lr"],
-    optimizer_config["warmup_steps"],
-    optimizer_config["decay_steps"],
-    optimizer_config["final_lr"],
-)
-optimizer = optax.adam(lr)
-del lr
+optimizer = checkpoint.optimizer(optimizer_config)
 
 
 # Initialize training state
@@ -95,9 +65,8 @@ def train_step(state, inputs, targets, labels):
             jax.vmap(metrics.cross_entropy_with_integer_labels)(preds, labels)
         )
 
-    grad_fn = jax.value_and_grad(loss_fn)
-    loss, grads = grad_fn(state.params)
-    return state.apply_gradients(grads=grads), loss
+    grads = jax.grad(loss_fn)(state.params)
+    return state.apply_gradients(grads=grads)
 
 
 @jax.jit
@@ -115,61 +84,42 @@ def compute_metrics(state, inputs, targets, labels):
 
 # Make checkpoint directory if it doesn't exist and initialize checkpoint manager
 if use_checkpoint := checkpoint_config["use_checkpoint"]:
-    freq = checkpoint_config["freq"]
-    checkpoint_path = root_dir / checkpoint_config["path"]
-    if checkpoint_path.exists() and checkpoint_config["overwrite"]:
-        checkpoint_path.rmtree()
-        checkpoint_path.mkdir(parents=True, exist_ok=True)
-    options = ocp.CheckpointManagerOptions(
-        max_to_keep=checkpoint_config["max_to_keep"],
-        save_interval_steps=freq,
+    periodic_checkpoint = checkpoint.PeriodicCheckpoint(
+        root_dir, checkpoint_config, dataset
     )
-    mngr = ocp.CheckpointManager(
-        checkpoint_path.resolve(),
-        options=options,
-    )
-    del checkpoint_path, options
 
     # Loading state and dataloader if checkpoint exists
-    if mngr.latest_step() is not None:
-        mngr.wait_until_finished()
-        state = mngr.restore(mngr.latest_step())
-        dataloader = dataloader.restore("dataset")
+    if periodic_checkpoint.latest_step() is not None:
+        state, dataloader = periodic_checkpoint.restore(
+            periodic_checkpoint.latest_step()
+        )
 
 
 # Optional configuration for logging to wandb
 if use_wandb := wandb_config["use_wandb"]:
-    run_config = wandb_config["run_config"]
-    run_config["epochs"] = train_config["epochs"]
-    run_config["model_parameters"] = sum(
-        [x.size for x in jax.tree_util.tree_leaves(params)]
-    )
-    run_config = dict(**run_config, **model_config)
-
-    run = wandb.init(
-        project=wandb_config["project"],
-        notes=wandb_config["notes"],
-        name=wandb_config["name"],
-        config=run_config,
-    )
-    del wandb_config
+    periodic_log = wandb.configure_wandb(wandb_config, model_config)
 
 
 # Training loop
 print("Running...")
 for i, (inputs, targets, labels) in enumerate(dataloader):
     # Train step
-    state, loss = train_step(state, inputs, targets, labels)
+    state = train_step(state, inputs, targets, labels)
 
     # Compute metrics
     state = compute_metrics(state, inputs, targets, labels)
     metrics = state.metrics.compute()
 
     # Checkpoint model and optimiser state
-    if use_checkpoint and i % freq == 0:
-        mngr.save(i, args=ocp.args.PyTreeSave(item=state))
-        dataloader.save("dataset")
+    if use_checkpoint:
+        periodic_checkpoint.save(i, args=ocp.args.PyTreeSave(item=state))
 
     # Log to wandb
     if use_wandb:
-        wandb.log({"loss": loss, **metrics})
+        periodic_log(
+            step=i,
+            data={
+                "loss": metrics["loss"],
+                "accuracy": metrics["accuracy"],
+            },
+        )
