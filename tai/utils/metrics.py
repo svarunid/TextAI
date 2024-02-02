@@ -17,6 +17,17 @@ class TrainState(TrainState):
 
 
 def cross_entropy_with_label_smoothing(preds, labels, smoothing=0.1):
+    """
+    Cross-entropy loss with label smoothing for padded interger labels.
+
+    Args:
+        preds (jnp.ndarray): Predictions.
+        labels (jnp.ndarray): Labels.
+        smoothing (float): Smoothing factor.
+
+    Returns:
+        jnp.ndarray: Cross-entropy loss.
+    """
     confidence = 1.0 - smoothing
     count = jnp.count_nonzero(labels)
     preds = nn.log_softmax(preds)
@@ -30,6 +41,16 @@ def cross_entropy_with_label_smoothing(preds, labels, smoothing=0.1):
 
 
 def cross_entropy_with_integer_labels(preds, labels):
+    """
+    Cross-entropy loss for padded integer labels.
+
+    Args:
+        preds (jnp.ndarray): Predictions.
+        labels (jnp.ndarray): Labels.
+
+    Returns:
+        jnp.ndarray: Cross-entropy loss.
+    """
     preds = nn.log_softmax(preds)
     preds = jnp.where(labels == 0, 0, jnp.take(preds, labels, axis=-1))
     count = jnp.count_nonzero(labels)
@@ -37,6 +58,16 @@ def cross_entropy_with_integer_labels(preds, labels):
 
 
 def accuracy(preds, labels):
+    """
+    Accuracy for padded integer labels.
+
+    Args:
+        preds (jnp.ndarray): Predictions.
+        labels (jnp.ndarray): Labels.
+
+    Returns:
+        jnp.ndarray: Accuracy.
+    """
     preds = nn.softmax(preds)
     preds = jnp.where(labels == 0, 0, jnp.argmax(preds, axis=-1))
     count = jnp.count_nonzero(labels)

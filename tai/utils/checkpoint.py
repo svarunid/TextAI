@@ -4,7 +4,7 @@ from orbax import checkpoint as ocp
 from tai.utils import data
 
 
-def create_checkpoint_manager(root_dir, config, ds):
+def create_checkpoint_manager(root_dir, config):
     """
     Create a checkpoint manager from a config dictionary.
     """
