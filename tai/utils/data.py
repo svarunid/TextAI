@@ -26,8 +26,8 @@ def create_tokenizer(config):
             return SentencepieceTokenizer(f.read(), alpha=alpha)
 
     if config["use_separate_tokenizer"]:
-        src_tok = load_tokenizer(config["src_lang"])
-        tgt_tok = load_tokenizer(config["tgt_lang"], alpha=config["alpha"])
+        src_tok = load_tokenizer(config["src_lang"], alpha=config["alpha"])
+        tgt_tok = load_tokenizer(config["tgt_lang"])
         return src_tok, tgt_tok
 
     tok = load_tokenizer(config["lang"], alpha=config["alpha"])
