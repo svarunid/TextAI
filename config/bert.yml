@@ -1,0 +1,53 @@
+# This file only serves as a template when execute any scripts. 
+# You can change the values of the parameters as you want.
+
+seed: 42
+
+model:
+  vocab: 5_000
+  emb_dim: 256
+  num_heads: 8
+  num_layers: 3
+  mlp_dim: 1024
+  qkv_dim: 256
+  max_len: 64
+  dropout: 0.1
+  deterministic: False
+  decode: False
+
+training:
+  task: mlm
+  dataset: wikipedia
+  epochs: 10
+  batch_size: 32
+  path: data/mlm/wikipedia
+  cache_dir: cache/mlm/wikipedia
+
+tokenizer:
+  path: tokenizer/mlm/wikipedia
+  lang: en
+  alpha: 0.1
+
+optimizer:
+  lr: 0.001
+  warmup_steps: 4000
+  peak_lr: 0.001
+  decay_steps: 8000
+  final_lr: 0.0001
+  
+wandb:
+  use_wandb: False
+  project: mlm_wikipedia
+  notes: Baseline MLM Bert model
+  name: Initial run
+  run_config:
+    task: mlm
+    dataset: wikipedia
+
+
+checkpoint:
+  use_checkpoint: False
+  overwrite: True
+  path: checkpoint/mlm/wikipedia/bert
+  freq: 25
+  max_to_keep: 5
