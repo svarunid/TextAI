@@ -225,13 +225,13 @@ class Transformer(nn.Module):
         return logits
 
 
-def create_model(config: TransformerConfig, rngs):
+def create_model(config: TransformerConfig, rngs: Dict) -> Transformer:
     """
-    Creates a Transformer model from the given configuration.
+    Creates and initializes a Transformer model from the given configuration.
 
     Args:
-        config (dict): Configuration dictionary.
-        key (jax.random.PRNGKey): Random key.
+        config (TransformerConfig): Transformer configuration.
+        rngs (Dict): Random number generators.
 
     Returns:
         tuple: Tuple of model and parameters.
