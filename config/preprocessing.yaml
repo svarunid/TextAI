@@ -1,22 +1,21 @@
-# This file only serves as a template when execute any scripts. 
+# This file only serves as a template for executing scripts. 
 # You can change the values of the parameters as you want.
 
-input_type: text
-train_size: 0.7
-dev_size: 0.15
-test_size: 0.15
+model: bpe
+sample_size: 1_000_000
+task: seq2seq
+norm_rule: nmt_nfkc # One of [nmt_nfkc, nmt_nfkc_cf, nfkc_cf, nfkc, identity]
 shuffle: True
-path: data/translation/europarl/en_fr
-
-text:
-  model: bpe
-  sample_size: 1_000_000
-  task: seq2seq
-  norm_rule: nmt_nfkc # One of [nmt_nfkc, nmt_nfkc_cf, nfkc_cf, nfkc, identity]
-  shuffle: True
   
-  seq2seq: 
-    src: en
-    tgt: fr
-    src_vocab: 5_000
-    tgt_vocab: 5_000
+seq2seq: 
+  src: en
+  tgt: fr
+  src_vocab: 5_000
+  tgt_vocab: 5_000
+
+mlm:
+  path: data/mlm/
+  cls_token: <cls>
+  sep_token: <sep>
+  vocab_size: 5_000
+  
