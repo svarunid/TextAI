@@ -1,6 +1,8 @@
 # This file only serves as a template for executing scripts. 
 # You can change the values of the parameters as you want.
 
+path: data/mlm
+
 model: bpe
 sample_size: 1_000_000
 task: seq2seq
@@ -14,7 +16,7 @@ seq2seq:
   tgt_vocab: 5_000
 
 mlm:
-  path: data/mlm/
+  path: wikipedia.txt
   cls_token: <cls>
   sep_token: <sep>
   vocab_size: 5_000
