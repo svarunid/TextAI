@@ -13,7 +13,7 @@ def configure_wandb(config, model_config):
             A dictionary containing the configuration for the model.
 
     Returns:
-        A wandb.Run object.
+        PeriodicCallback: A periodic callback to log to wandb.
     """
 
     def periodic_log(steps):
