@@ -81,7 +81,7 @@ class PosEmbedding(nn.Module):
             if is_intialized:
                 i = cache_index.value
                 cache_index.value = i + 1
-                _, _, df = pos_emb.shape
+                _, df = pos_emb.shape
                 pe = lax.dynamic_slice(pos_emb, jnp.array((i, 0)), (1, df))
         return inputs + pe
 
