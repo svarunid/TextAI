@@ -27,7 +27,7 @@ training:
   src_max_len: 64
   tgt: fr
   tgt_max_len: 64
-  cache_dir: cache/translation/europarl/en_fr
+  # cache_dir: cache/translation/europarl/en_fr
 
 tokenizer:
   path: tokenizer/translation/europarl/en_fr
@@ -40,7 +40,7 @@ tokenizer:
 optimizer:
   lr: 0.001
   warmup_steps: 4000
-  peak_lr: 0.001
+  peak_lr: 1
   decay_steps: 8000
   final_lr: 0.0001
   

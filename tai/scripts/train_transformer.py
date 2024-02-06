@@ -9,7 +9,12 @@ from jax import numpy as jnp
 from orbax import checkpoint as ocp
 
 from tai.models.transformer import TransformerConfig, create_model
-from tai.utils import checkpoint, data, metrics, wandb
+from tai.utils import checkpoint, data, optim, wandb
+from tai.utils.metrics import (
+    TrainState,
+    accuracy as accuracy_fn,
+    cross_entropy_with_integer_labels,
+)
 
 # Configuring JAX & tensorflow
 jax_config.update("jax_debug_nans", True)
@@ -18,7 +23,7 @@ jax_config.update("jax_debug_infs", True)
 
 # Loading configuration
 root_dir = epath.Path(os.path.dirname(os.path.realpath(__file__))).parent.parent
-config_dir = root_dir / "config" / "transformer.yaml"
+config_dir = root_dir / "config" / "transformer.yml"
 with open(config_dir, "r") as f:
     config = yaml.load(f, Loader=yaml.Loader)
     del config_dir
@@ -41,17 +46,19 @@ dataset = data.create_dataset(root_dir, train_config, tok_config)
 params_key, dropout_key = jax.random.split(jax.random.PRNGKey(seed))
 model, params = create_model(
     TransformerConfig.fromDict(model_config),
-    {"params": params_key, "dropout": dropout_key},
+    {
+        "params": params_key, 
+        "dropout": dropout_key
+    },
 )
-optimizer = checkpoint.optimizer(optimizer_config)
+optimizer = optim.optimizer(optimizer_config)
 
 
 # Initialize training state
-state = metrics.TrainState.create(
+state = TrainState.create(
     apply_fn=model.apply,
     params=params,
     tx=optimizer,
-    metrics=metrics.Metrics.empty(),
 )
 del params, optimizer
 
@@ -61,9 +68,7 @@ del params, optimizer
 def train_step(state, inputs, targets, labels):
     def loss_fn(params):
         preds = state.apply_fn(params, inputs, targets, rngs={"dropout": dropout_key})
-        return jnp.mean(
-            jax.vmap(metrics.cross_entropy_with_integer_labels)(preds, labels)
-        )
+        return jnp.mean(jax.vmap(cross_entropy_with_integer_labels)(preds, labels))
 
     grads = jax.grad(loss_fn)(state.params)
     return state.apply_gradients(grads=grads)
@@ -72,8 +77,8 @@ def train_step(state, inputs, targets, labels):
 @jax.jit
 def compute_metrics(state, inputs, targets, labels):
     preds = state.apply_fn(state.params, inputs, targets, rngs={"dropout": dropout_key})
-    loss = jnp.mean(jax.vmap(metrics.cross_entropy_with_integer_labels)(preds, labels))
-    accuracy = jnp.mean(jax.vmap(metrics.accuracy)(preds, labels))
+    loss = jnp.mean(jax.vmap(cross_entropy_with_integer_labels)(preds, labels))
+    accuracy = jnp.mean(jax.vmap(accuracy_fn)(preds, labels))
     metrics_updates = state.metrics.single_from_model_output(
         loss=loss,
         accuracy=accuracy,
@@ -83,15 +88,15 @@ def compute_metrics(state, inputs, targets, labels):
 
 
 # Make checkpoint directory if it doesn't exist and initialize checkpoint manager
-if use_checkpoint := checkpoint_config["use_checkpoint"]:
-    periodic_checkpoint = checkpoint.PeriodicCheckpoint(
-        root_dir, checkpoint_config, dataset
-    )
+periodic_checkpoint_loader = checkpoint.PeriodicCheckpoint(
+    root_dir, checkpoint_config, dataset
+)
 
+if use_checkpoint := checkpoint_config["use_checkpoint"]:
     # Loading state and dataloader if checkpoint exists
-    if periodic_checkpoint.latest_step() is not None:
-        state, dataloader = periodic_checkpoint.restore(
-            periodic_checkpoint.latest_step()
+    if periodic_checkpoint_loader.latest_step() is not None:
+        state, dataloader = periodic_checkpoint_loader.restore(
+            periodic_checkpoint_loader.latest_step()
         )
 
 
@@ -102,7 +107,7 @@ if use_wandb := wandb_config["use_wandb"]:
 
 # Training loop
 print("Running...")
-for i, (inputs, targets, labels) in enumerate(dataloader):
+for i, (inputs, targets, labels) in enumerate(periodic_checkpoint_loader):
     # Train step
     state = train_step(state, inputs, targets, labels)
 
@@ -110,9 +115,11 @@ for i, (inputs, targets, labels) in enumerate(dataloader):
     state = compute_metrics(state, inputs, targets, labels)
     metrics = state.metrics.compute()
 
+    print(f"Loss: {metrics['loss']}, Accuracy: {metrics['accuracy']}")
+
     # Checkpoint model and optimiser state
     if use_checkpoint:
-        periodic_checkpoint.save(i, args=ocp.args.PyTreeSave(item=state))
+        periodic_checkpoint_loader.save(i, args=ocp.args.PyTreeSave(item=state))
 
     # Log to wandb
     if use_wandb:

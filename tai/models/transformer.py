@@ -66,12 +66,12 @@ class PosEmbedding(nn.Module):
     @nn.compact
     def __call__(self, inputs) -> jax.Array:
         length = inputs.shape[1]
-        pos_emb_shape = (1, length, self.config.emb_dim)
+        pos_emb_shape = (self.config.max_len, self.config.emb_dim)
         if self.config.pos_emb_init is None:
-            pos_emb = sinusoidal_init(self.config.max_len)(None, pos_emb_shape)
+            pos_emb = sinusoidal_init(self.config.max_len)(None, pos_emb_shape, None)
         else:
             pos_emb = self.param("pos_emb", self.config.pos_emb_init, pos_emb_shape)
-        pe = pos_emb[:, :length, :]
+        pe = pos_emb[:length, :]
 
         if self.config.decode:
             is_intialized = self.has_variable("cache", "cache_index")
@@ -82,7 +82,7 @@ class PosEmbedding(nn.Module):
                 i = cache_index.value
                 cache_index.value = i + 1
                 _, _, df = pos_emb.shape
-                pe = lax.dynamic_slice(pos_emb, jnp.array((0, i, 0)), (1, 1, df))
+                pe = lax.dynamic_slice(pos_emb, jnp.array((i, 0)), (1, df))
         return inputs + pe
 
 
@@ -120,7 +120,7 @@ class EncoderLayer(nn.Module):
             num_heads=self.config.num_heads,
             qkv_features=self.config.qkv_dim,
             kernel_init=self.config.kernel_init,
-            bias_init=self.config.bias_init,
+            use_bias=False,
             broadcast_dropout=False,
             dropout_rate=self.config.dropout,
             deterministic=self.config.deterministic,
@@ -128,7 +128,7 @@ class EncoderLayer(nn.Module):
         x = nn.LayerNorm()(x + inputs)
 
         y = MLP(self.config)(x)
-        y = nn.LayerNorm()(y + x)
+        y = nn.LayerNorm(bias_init=nn.initializers.ones)(y + x)
         return y
 
 
@@ -141,24 +141,24 @@ class DecoderLayer(nn.Module):
             num_heads=self.config.num_heads,
             qkv_features=self.config.qkv_dim,
             kernel_init=self.config.kernel_init,
-            bias_init=self.config.bias_init,
+            use_bias=False,
             broadcast_dropout=False,
             dropout_rate=self.config.dropout,
             deterministic=self.config.deterministic,
             decode=self.config.decode,
         )(inputs, inputs, inputs, mask=input_mask)
-        x = nn.LayerNorm()(x + inputs)
+        x = nn.LayerNorm(bias_init=nn.initializers.ones)(x + inputs)
 
         y = nn.MultiHeadDotProductAttention(
             num_heads=self.config.num_heads,
             qkv_features=self.config.qkv_dim,
             kernel_init=self.config.kernel_init,
-            bias_init=self.config.bias_init,
+            use_bias=False,
             broadcast_dropout=False,
             dropout_rate=self.config.dropout,
             deterministic=self.config.deterministic,
         )(x, enc_out, enc_out, mask=enc_mask)
-        y = nn.LayerNorm()(y + x)
+        y = nn.LayerNorm(bias_init=nn.initializers.ones)(y + x)
 
         z = MLP(self.config)(y)
         z = nn.LayerNorm()(z + y)
@@ -174,7 +174,7 @@ class Encoder(nn.Module):
         x = nn.Embed(
             num_embeddings=self.config.in_vocab,
             features=self.config.emb_dim,
-            embedding_init=self.config.kernel_init,
+            embedding_init=nn.initializers.he_normal(),
         )(inputs)
         x = PosEmbedding(self.config)(x)
         for i in range(self.config.num_layers):
@@ -191,7 +191,7 @@ class Decoder(nn.Module):
         x = nn.Embed(
             num_embeddings=self.config.out_vocab,
             features=self.config.emb_dim,
-            embedding_init=self.config.kernel_init,
+            embedding_init=nn.initializers.he_normal(),
         )(inputs)
         x = PosEmbedding(self.config)(x)
         for i in range(self.config.num_layers):

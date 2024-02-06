@@ -49,9 +49,9 @@ def create_dataset(root_dir, config, tok_config):
     """
     tok_config["path"] = root_dir / tok_config["path"]
 
-    cache_dir = root_dir / config["cache_dir"]
-    if not cache_dir.exists():
-        cache_dir.mkdir(parents=True, exist_ok=True)
+    # cache_dir = root_dir / config["cache_dir"]
+    # if not cache_dir.exists():
+    #     cache_dir.mkdir(parents=True, exist_ok=True)
 
     src = root_dir / config["path"] / config["src"]
     tgt = root_dir / config["path"] / config["tgt"]
@@ -81,7 +81,7 @@ def create_dataset(root_dir, config, tok_config):
                 config["tgt_max_len"],
             ),
         )
-        .cache(filename=os.fspath(cache_dir))
+        # .cache(filename=os.fspath(cache_dir))
         .repeat(config["epochs"])
         .prefetch(AUTOTUNE)
     )

@@ -44,7 +44,7 @@ class PeriodicCheckpoint:
         self.ckpt_manager = create_checkpoint_manager(root_dir, config)
         self.dataloader = data.TfDatasetIterator(ds, config["path"])
         self.periodic_save = PeriodicCallback(
-            config["freq"],
+            every_steps=config["freq"],
             callback_fn=lambda step, args: (
                 self.ckpt_manager.save(step, args),
                 self.dataloader.save("dataset"),
@@ -52,6 +52,18 @@ class PeriodicCheckpoint:
             execute_async=True,
             pass_step_and_time=False,
         )
+
+    def __iter__(self):
+        """
+        Return the iterator of the dataset.
+        """
+        return iter(self.dataloader)
+
+    def __next__(self):
+        """
+        Return the next element of the dataset.
+        """
+        return next(self.dataloader)
 
     def restore(self, step):
         """

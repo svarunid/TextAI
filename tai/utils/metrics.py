@@ -1,8 +1,7 @@
 import flax.linen as nn
 from clu import metrics
 from flax import struct
-from flax.training.train_state import TrainState
-from jax import lax
+from flax.training.train_state import TrainState as _TrainState
 from jax import numpy as jnp
 
 
@@ -12,9 +11,20 @@ class Metrics(metrics.Collection):
     accuracy: metrics.Average.from_output("accuracy")
 
 
-class TrainState(TrainState):
+class TrainState(_TrainState):
     metrics: Metrics
 
+    @classmethod
+    def create(cls, apply_fn, params, tx):
+        opt_state = tx.init(params)
+        return cls(
+            step=0,
+            apply_fn=apply_fn,
+            params=params,
+            tx=tx,
+            metrics=Metrics.empty(),
+            opt_state=opt_state,
+        )
 
 def cross_entropy_with_label_smoothing(preds, labels, smoothing=0.1):
     """
@@ -28,16 +38,15 @@ def cross_entropy_with_label_smoothing(preds, labels, smoothing=0.1):
     Returns:
         jnp.ndarray: Cross-entropy loss.
     """
+    mask = labels != 0
     confidence = 1.0 - smoothing
-    count = jnp.count_nonzero(labels)
-    preds = nn.log_softmax(preds)
     n_class = preds.shape[-1]
     smooth_labels = jnp.where(
         nn.one_hot(labels, n_class) == 0, smoothing / (n_class - 1), confidence
     )
     smooth_labels.at[..., 0].set(0.0)
-    prod = lax.dynamic_slice(smooth_labels * preds, (0, 0), (count, n_class))
-    return -jnp.sum(prod) / count
+    prod = jnp.sum(smooth_labels * nn.log_softmax(preds), axis=-1) * mask
+    return -jnp.sum(prod) / jnp.sum(mask)
 
 
 def cross_entropy_with_integer_labels(preds, labels):
@@ -51,11 +60,9 @@ def cross_entropy_with_integer_labels(preds, labels):
     Returns:
         jnp.ndarray: Cross-entropy loss.
     """
-    preds = nn.log_softmax(preds)
-    preds = jnp.where(labels == 0, 0, jnp.take(preds, labels, axis=-1))
-    count = jnp.count_nonzero(labels)
-    return -jnp.sum(preds) / count
-
+    mask = labels != 0
+    cross_entropy = jnp.take_along_axis(nn.log_softmax(preds), labels[..., None], axis=-1)
+    return -jnp.sum(cross_entropy * mask) / jnp.sum(mask)
 
 def accuracy(preds, labels):
     """
@@ -68,7 +75,7 @@ def accuracy(preds, labels):
     Returns:
         jnp.ndarray: Accuracy.
     """
-    preds = nn.softmax(preds)
-    preds = jnp.where(labels == 0, 0, jnp.argmax(preds, axis=-1))
-    count = jnp.count_nonzero(labels)
-    return jnp.sum(preds == labels) / count
+    mask = labels != 0
+    correct = jnp.allclose(jnp.argmax(preds, axis=-1), labels) * mask
+    return jnp.sum(correct) / jnp.sum(mask)
+
