@@ -61,8 +61,8 @@ def cross_entropy_with_integer_labels(preds, labels):
         jnp.ndarray: Cross-entropy loss.
     """
     mask = labels != 0
-    cross_entropy = jnp.take_along_axis(nn.log_softmax(preds), labels[..., None], axis=-1)
-    return -jnp.sum(cross_entropy * mask) / jnp.sum(mask)
+    ce = jnp.take_along_axis(nn.log_softmax(preds), labels[..., None], axis=-1)
+    return -jnp.sum(ce * mask) / jnp.sum(mask)
 
 def accuracy(preds, labels):
     """
