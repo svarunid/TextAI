@@ -3,9 +3,9 @@
 /data/
 /wandb/
 /tokenizer/
+cache/
 **/*.egg-info/
 **/__pycache__/
-**/*.*pkl
 **/*.model
 **/*.vocab
 **/*.zip
