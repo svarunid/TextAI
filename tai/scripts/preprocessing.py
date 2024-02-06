@@ -15,6 +15,7 @@ data_path = Path(config["path"])
 task = config["task"]
 task_config = config[task]
 
+
 def train_tokenizer(dir, vocab_size, control_symbols=[]):
     spm.SentencePieceTrainer.train(
         input=os.fspath(root_dir / data_path / dir),
@@ -44,7 +45,7 @@ match task:
         train_tokenizer(task_config["tgt"], task_config["tgt_vocab"])
     case "mlm":
         train_tokenizer(
-            task_config["src"], 
+            task_config["src"],
             task_config["vocab"],
-            control_symbols=[task_config["cls_token"], task_config["sep_token"]]
+            control_symbols=[task_config["cls_token"], task_config["sep_token"]],
         )

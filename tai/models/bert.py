@@ -6,6 +6,7 @@ import jax.numpy as jnp
 import numpy as np
 from flax import struct
 
+
 @struct.dataclass
 class BertConfig:
     vocab_size: int
@@ -36,26 +37,31 @@ class BertConfig:
             deterministic=config["deterministic"],
         )
 
+
 class BertEmbeddings(nn.Module):
     config: BertConfig
 
     def setup(self):
         self.token_emb = nn.Embed(
-            self.config.vocab_size, self.config.emb_dim, kernel_init=self.config.kernel_init
+            self.config.vocab_size,
+            self.config.emb_dim,
+            kernel_init=self.config.kernel_init,
         )
         self.seq_emb = nn.Embed(
             2, self.config.emb_dim, kernel_init=self.config.kernel_init
         )
         self.pos_emb = nn.Embed(
-            self.config.max_length, self.config.emb_dim, kernel_init=self.config.kernel_init
+            self.config.max_length,
+            self.config.emb_dim,
+            kernel_init=self.config.kernel_init,
         )
-    
+
     def __call__(self, inputs, sequence_id) -> jax.Array:
         token_emb = self.token_emb(inputs)
         seq_emb = self.seq_emb(sequence_id)
         pos_emb = self.pos_emb(jnp.arange(self.config.max_length))
         return token_emb + seq_emb + pos_emb
-        
+
 
 class MLP(nn.Module):
     config: BertConfig
@@ -81,6 +87,7 @@ class MLP(nn.Module):
         )
         return x
 
+
 class EncoderLayer(nn.Module):
     config: BertConfig
 
@@ -100,7 +107,8 @@ class EncoderLayer(nn.Module):
         y = MLP(self.config)(x)
         y = nn.LayerNorm()(y + x)
         return y
-    
+
+
 class Encoder(nn.Module):
     config: BertConfig
 
@@ -111,6 +119,7 @@ class Encoder(nn.Module):
         for i in range(self.config.num_layers):
             x = EncoderLayer(self.config, name=f"encoder_layer_{i}")(x, mask)
         return x
+
 
 class Bert(nn.Module):
     config: BertConfig
@@ -126,6 +135,7 @@ class Bert(nn.Module):
         )(x)
         return x
 
+
 def create_model(config: BertConfig, rngs: Dict) -> Bert:
     """
     Creates and initializes a Bert model with the given configuration and random number generators.
@@ -133,7 +143,7 @@ def create_model(config: BertConfig, rngs: Dict) -> Bert:
     Args:
         config (BertConfig): Configuration for the Bert model
         rngs (Dict): Random number generators for initializing the model
-    
+
     Returns:
         tuple: A tuple containing the initialized Bert model and its parameters
     """
