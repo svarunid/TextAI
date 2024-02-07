@@ -1,7 +1,7 @@
 import flax.linen as nn
 from clu import metrics
 from flax import struct
-from flax.training.train_state import TrainState as _TrainState
+from flax.training.train_state import TrainState as _TrainState # prevent name conflict
 from jax import numpy as jnp
 
 

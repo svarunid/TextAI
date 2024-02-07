@@ -1,4 +1,4 @@
-import wandb
+import wandb as _wandb # prevent name conflict
 from clu.periodic_actions import PeriodicCallback
 
 
@@ -19,7 +19,7 @@ def configure_wandb(config, model_config):
     def periodic_log(steps):
         pc = PeriodicCallback(
             steps,
-            callback_fn=wandb.log,
+            callback_fn=_wandb.log,
             execute_async=True,
             pass_step_and_time=False,
         )
@@ -30,7 +30,7 @@ def configure_wandb(config, model_config):
     run_config["model_parameters"] = config["params"]
     run_config = dict(**run_config, **model_config)
 
-    wandb.init(
+    _wandb.init(
         project=config["project"],
         notes=config["notes"],
         name=config["name"],

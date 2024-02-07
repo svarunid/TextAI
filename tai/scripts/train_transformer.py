@@ -1,7 +1,6 @@
 import os
 
 import jax
-import wandb
 import yaml
 from etils import epath
 from jax import config as jax_config
@@ -88,15 +87,15 @@ def compute_metrics(state, inputs, targets, labels):
 
 
 # Make checkpoint directory if it doesn't exist and initialize checkpoint manager
-periodic_checkpoint_loader = checkpoint.PeriodicCheckpoint(
+periodic_checkpointer = checkpoint.PeriodicCheckpoint(
     root_dir, checkpoint_config, dataset
 )
 
 if use_checkpoint := checkpoint_config["use_checkpoint"]:
     # Loading state and dataloader if checkpoint exists
-    if periodic_checkpoint_loader.latest_step() is not None:
-        state, dataloader = periodic_checkpoint_loader.restore(
-            periodic_checkpoint_loader.latest_step()
+    if periodic_checkpointer.latest_step() is not None:
+        state, dataloader = periodic_checkpointer.restore(
+            periodic_checkpointer.latest_step()
         )
 
 
@@ -107,7 +106,7 @@ if use_wandb := wandb_config["use_wandb"]:
 
 # Training loop
 print("Running...")
-for i, (inputs, targets, labels) in enumerate(periodic_checkpoint_loader):
+for i, (inputs, targets, labels) in enumerate(periodic_checkpointer):
     # Train step
     state = train_step(state, inputs, targets, labels)
 
@@ -119,7 +118,7 @@ for i, (inputs, targets, labels) in enumerate(periodic_checkpoint_loader):
 
     # Checkpoint model and optimiser state
     if use_checkpoint:
-        periodic_checkpoint_loader.save(i, args=ocp.args.PyTreeSave(item=state))
+        periodic_checkpointer.save(i, args=ocp.args.PyTreeSave(item=state))
 
     # Log to wandb
     if use_wandb:

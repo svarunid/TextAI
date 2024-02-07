@@ -39,7 +39,7 @@ class TransformerConfig:
     dropout: float
     deterministic: bool = False
     decode: bool = False
-    kernel_init: nn.initializers = nn.initializers.he_uniform()
+    kernel_init: nn.initializers = nn.initializers.he_normal()
     bias_init: nn.initializers = nn.initializers.ones
     pos_emb_init: Optional[Callable] = None
 
@@ -125,7 +125,7 @@ class EncoderLayer(nn.Module):
             dropout_rate=self.config.dropout,
             deterministic=self.config.deterministic,
         )(inputs, inputs, inputs, mask=mask)
-        x = nn.LayerNorm()(x + inputs)
+        x = nn.LayerNorm(bias_init=nn.initializers.ones)(x + inputs)
 
         y = MLP(self.config)(x)
         y = nn.LayerNorm(bias_init=nn.initializers.ones)(y + x)
@@ -161,7 +161,7 @@ class DecoderLayer(nn.Module):
         y = nn.LayerNorm(bias_init=nn.initializers.ones)(y + x)
 
         z = MLP(self.config)(y)
-        z = nn.LayerNorm()(z + y)
+        z = nn.LayerNorm(bias_init=nn.initializers.ones)(z + y)
         return z
 
 
